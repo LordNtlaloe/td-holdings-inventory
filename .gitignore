@@ -11,4 +11,5 @@ dist-ssr
 .vinxi
 __unconfig*
 todos.json
-.yarn
+.yarnprivate-key.pem
+private-key.b64.txt
