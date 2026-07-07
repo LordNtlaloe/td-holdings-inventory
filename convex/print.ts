@@ -21,7 +21,7 @@ import { Jimp } from "jimp"
 
 const LOGO_URL = "https://res.cloudinary.com/ntlaloe-org/image/upload/w_384,f_png/v1782201264/TD_Holdings_mm9zfc.png"
 const LOGO_MAX_WIDTH = 240
-const PRINT_SERVER_URL = "https://smell-outplayed-hypnotic.ngrok-free.dev/api/print"
+const PRINTNODE_API_KEY = process.env.PRINTNODE_API_KEY as string
 
 // ===============================
 // HELPERS
@@ -64,28 +64,13 @@ async function nodeImageReader(src: string): Promise<{
     }
 }
 
-/**
- * Truncates a name to show only the first part (before space or comma)
- * Examples:
- * - "John Doe" -> "John"
- * - "Jane Smith, Manager" -> "Jane"
- * - "Dr. Michael Johnson" -> "Dr. Michael"
- */
 function getShortName(fullName: string): string {
     if (!fullName) return ''
-
-    // Remove any titles/roles after comma
     const nameWithoutTitle = fullName.split(',')[0].trim()
-
-    // Take first name (before first space)
     const nameParts = nameWithoutTitle.split(' ')
-
-    // If there's a title like "Dr." or "Mr.", include it with the first name
     if (nameParts.length > 1 && nameParts[0].endsWith('.')) {
         return `${nameParts[0]} ${nameParts[1]}`
     }
-
-    // Otherwise just return the first part (usually the first name)
     return nameParts[0] || fullName
 }
 
@@ -111,6 +96,41 @@ type SaleDiscount = {
     productId: string
     discountAmount: number
     reason?: string
+}
+
+// ===============================
+// PRINTNODE HELPER
+// ===============================
+
+async function sendToPrintNode(receiptBytes: Uint8Array, printerId: number, title: string) {
+    if (!PRINTNODE_API_KEY) {
+        throw new Error("PRINTNODE_API_KEY is not set in Convex environment variables")
+    }
+
+    const base64Data = Buffer.from(receiptBytes).toString("base64")
+
+    const response = await fetch("https://api.printnode.com/printjobs", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Basic ${Buffer.from(`${PRINTNODE_API_KEY}:`).toString("base64")}`,
+        },
+        body: JSON.stringify({
+            printerId,
+            title,
+            contentType: "raw_base64",
+            content: base64Data,
+            source: "td-holdings-inventory",
+        }),
+    })
+
+    const responseText = await response.text()
+
+    if (!response.ok) {
+        throw new Error(`PrintNode error (${response.status}): ${responseText}`)
+    }
+
+    return responseText
 }
 
 // ===============================
@@ -143,8 +163,6 @@ export const printReceipt = action({
                 departmentName: v.string(),
             })
         ),
-        // Discount rows from saleDiscounts — written by createSale,
-        // passed in by the frontend after the sale completes.
         discounts: v.array(
             v.object({
                 productId: v.string(),
@@ -155,6 +173,7 @@ export const printReceipt = action({
         total: v.number(),
         itemCount: v.number(),
         completedAt: v.number(),
+        printerId: v.number(), // PrintNode printer ID for the requesting store
     },
 
     handler: async (ctx, args) => {
@@ -164,7 +183,6 @@ export const printReceipt = action({
         const discounts = args.discounts as SaleDiscount[]
         const hasTyre = hasTyreItems(items)
 
-        // Build a quick lookup: productId -> discountAmount
         const discountByProduct: Record<string, number> = {}
         for (const d of discounts) {
             discountByProduct[d.productId] = d.discountAmount
@@ -172,7 +190,6 @@ export const printReceipt = action({
 
         const totalDiscount = discounts.reduce((sum, d) => sum + d.discountAmount, 0)
 
-        // ── Header name: store for tyre sales, department otherwise ───────
         let headerName: string
         let headerLabel: string
 
@@ -185,7 +202,6 @@ export const printReceipt = action({
             headerLabel = "DEPARTMENT"
         }
 
-        // ── LOGO ──────────────────────────────────────────────────────────
         try {
             children.push(
                 React.createElement(Image, {
@@ -199,7 +215,6 @@ export const printReceipt = action({
             console.warn("Failed to load logo:", error)
         }
 
-        // ── HEADER ────────────────────────────────────────────────────────
         children.push(
             React.createElement(
                 Text,
@@ -223,7 +238,6 @@ export const printReceipt = action({
         children.push(React.createElement(Line, { character: "=" }))
         children.push(React.createElement(Br, null))
 
-        // ── DATE & TRANSACTION ID ─────────────────────────────────────────
         children.push(
             React.createElement(
                 Text,
@@ -242,19 +256,16 @@ export const printReceipt = action({
         children.push(React.createElement(Line, null))
         children.push(React.createElement(Br, null))
 
-        // ── TRANSACTION DETAILS ───────────────────────────────────────────
         children.push(
             React.createElement(Text, { align: "center" }, "TRANSACTION DETAILS")
         )
         children.push(React.createElement(Br, null))
 
-        // Show cashier with truncated name (first name only)
         if (args.cashierName) {
             const shortCashierName = getShortName(args.cashierName)
             children.push(React.createElement(Text, null, `Cashier: ${shortCashierName}`))
         }
 
-        // Show customer with truncated name (first name only)
         if (args.customerName) {
             const shortCustomerName = getShortName(args.customerName)
             children.push(React.createElement(Text, null, `Customer: ${shortCustomerName}`))
@@ -276,7 +287,6 @@ export const printReceipt = action({
         children.push(React.createElement(Br, null))
         children.push(React.createElement(Line, null))
 
-        // ── ITEMS LIST ────────────────────────────────────────────────────
         children.push(
             React.createElement(Text, { align: "center" }, "ITEMS PURCHASED")
         )
@@ -289,10 +299,6 @@ export const printReceipt = action({
             const itemName = `${line.name}${optionLabel ? ` (${optionLabel})` : ""}`
             const lineTotal = line.unitPrice * line.quantity
 
-            // Discount is stored per product (flat amount). Distribute it
-            // proportionally across lines that share the same productId,
-            // in case the same product appears as multiple cart lines
-            // (e.g. different sizes/colors).
             let lineDiscount = 0
             const productDiscount = discountByProduct[line.productId]
             if (productDiscount !== undefined) {
@@ -322,7 +328,6 @@ export const printReceipt = action({
             children.push(React.createElement(Br, null))
         }
 
-        // ── TOTALS ────────────────────────────────────────────────────────
         children.push(React.createElement(Line, null))
         children.push(React.createElement(Br, null))
         children.push(
@@ -393,7 +398,6 @@ export const printReceipt = action({
         children.push(React.createElement(Br, null))
         children.push(React.createElement(Line, null))
 
-        // ── FOOTER ────────────────────────────────────────────────────────
         children.push(React.createElement(Br, null))
         children.push(
             React.createElement(Text, { align: "center" }, "THANK YOU FOR SHOPPING WITH US")
@@ -412,7 +416,6 @@ export const printReceipt = action({
         children.push(React.createElement(Br, null))
         children.push(React.createElement(Cut, null))
 
-        // ── RENDER & SEND ─────────────────────────────────────────────────
         const receipt = React.createElement(Printer, {
             type: "epson" as const,
             width: 42,
@@ -423,39 +426,13 @@ export const printReceipt = action({
         try {
             const data = await render(receipt)
 
-            const response = await fetch(PRINT_SERVER_URL, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    // Free-tier ngrok tunnels serve an HTML interstitial warning
-                    // page to any request missing this header, instead of
-                    // proxying through to the local print server. Without it,
-                    // response.json() below fails on the HTML page.
-                    "ngrok-skip-browser-warning": "true",
-                },
-                body: JSON.stringify({
-                    receiptData: Array.from(data),
-                    paymentMethod: args.paymentMethod,
-                }),
-            })
+            await sendToPrintNode(
+                data,
+                args.printerId,
+                `Receipt ${args.saleId.slice(-8)} — ${args.storeName}`
+            )
 
-            if (!response.ok) {
-                const text = await response.text()
-                throw new Error(
-                    `Print server returned ${response.status}: ${text.slice(0, 200)}`
-                )
-            }
-
-            const contentType = response.headers.get("content-type") || ""
-            if (!contentType.includes("application/json")) {
-                const text = await response.text()
-                throw new Error(`Expected JSON from print server, got: ${text.slice(0, 200)}`)
-            }
-
-            const result = await response.json()
-            if (!result.success) throw new Error(result.error || "Failed to print")
-
-            return { success: true, message: "Receipt printed successfully" }
+            return { success: true, message: "Receipt sent to printer" }
         } catch (error) {
             console.error("Print error:", error)
             return {
