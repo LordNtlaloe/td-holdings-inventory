@@ -5,15 +5,15 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 /**
  * Helper to get the currently authenticated user's document.
  */
-export async function getCurrentUser(ctx: QueryCtx | MutationCtx): Promise<Doc<"users">> {
+export async function getCurrentUser(ctx: QueryCtx | MutationCtx): Promise<Doc<"users"> | null> {
     const userId = await getAuthUserId(ctx);
     if (!userId) {
-        throw new Error("Not authenticated");
+        return null;
     }
 
     const user = await ctx.db.get(userId);
     if (!user) {
-        throw new Error("User not found");
+        return null;
     }
 
     return user;
@@ -44,11 +44,15 @@ export async function requireRole(
     allowedRoles: Array<"super_admin" | "admin" | "manager" | "cashier">
 ): Promise<Doc<"users">> {
     const user = await getCurrentUser(ctx);
-    
+
+    if (!user) {
+        throw new Error("Not authenticated");
+    }
+
     if (!allowedRoles.includes(user.role)) {
         throw new Error("Unauthorized: Insufficient permissions");
     }
-    
+
     return user;
 }
 
@@ -57,9 +61,9 @@ export async function requireRole(
  */
 export async function getCurrentUserWithEmployee(
     ctx: QueryCtx | MutationCtx
-): Promise<{ user: Doc<"users">; employee: Doc<"employees"> | null }> {
+): Promise<{ user: Doc<"users"> | null; employee: Doc<"employees"> | null }> {
     const user = await getCurrentUser(ctx);
-    const employee = await getCurrentEmployee(ctx);
-    
+    const employee = user ? await getCurrentEmployee(ctx) : null;
+
     return { user, employee };
 }

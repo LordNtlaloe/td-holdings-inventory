@@ -2,14 +2,71 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { requireRole } from "./utils";
 import { internal } from "./_generated/api";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
+/**
+ * Get all departments
+ */
 export const getAllDepartments = query({
     args: {},
     handler: async (ctx) => {
         await requireRole(ctx, ["super_admin", "admin", "manager", "cashier"]);
-        return await ctx.db.query("departments").collect();
+        const departments = await ctx.db.query("departments").collect();
+
+        // Get product count for each department
+        const departmentsWithCount = await Promise.all(
+            departments.map(async (dept) => {
+                const products = await ctx.db
+                    .query("products")
+                    .withIndex("by_department", (q) => q.eq("departmentId", dept._id))
+                    .collect();
+                return {
+                    ...dept,
+                    productCount: products.length,
+                };
+            })
+        );
+
+        return departmentsWithCount;
     },
 });
+
+/**
+ * Get a single department by ID
+ */
+export const getDepartmentById = query({
+    args: { departmentId: v.id("departments") },
+    handler: async (ctx, args) => {
+        await requireRole(ctx, ["super_admin", "admin", "manager", "cashier"]);
+        return await ctx.db.get(args.departmentId);
+    },
+});
+
+/**
+ * Get departments for a specific store
+ */
+export const getDepartmentsByStore = query({
+    args: { storeId: v.id("stores") },
+    handler: async (ctx, args) => {
+        await requireRole(ctx, ["super_admin", "admin", "manager", "cashier"]);
+
+        // Get store-department mappings
+        const storeDepts = await ctx.db
+            .query("storeDepartments")
+            .withIndex("by_store", (q) => q.eq("storeId", args.storeId))
+            .collect();
+
+        // Get the actual department documents
+        const departments = await Promise.all(
+            storeDepts.map(async (sd) => {
+                return await ctx.db.get(sd.departmentId);
+            })
+        );
+
+        return departments.filter(Boolean);
+    },
+});
+
 
 export const getAllDepartmentsWithStoreCount = query({
     args: {},
@@ -111,18 +168,6 @@ export const getDepartmentActivityStats = query({
         }));
 
         return activityData;
-    },
-});
-
-export const getDepartmentById = query({
-    args: { departmentId: v.id("departments") },
-    handler: async (ctx, args) => {
-        await requireRole(ctx, ["super_admin", "admin", "manager", "cashier"]);
-
-        const department = await ctx.db.get(args.departmentId);
-        if (!department) throw new Error("Department not found");
-
-        return department;
     },
 });
 

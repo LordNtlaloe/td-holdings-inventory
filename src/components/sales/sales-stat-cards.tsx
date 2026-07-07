@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { TrendingUp, Receipt, RotateCcw } from 'lucide-react'
+import { TrendingUp, Receipt, RotateCcw, XCircle } from 'lucide-react'
 import { formatCurrency } from './sales-utils'
 import type { SalesStats } from '#/types/sales'
 
@@ -52,7 +52,7 @@ export function SalesStatCards({ stats, isLoading }: SalesStatCardsProps) {
     }
 
     return (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
             <StatCard
                 title="Revenue"
                 value={formatCurrency(stats.totalRevenue)}
@@ -76,6 +76,12 @@ export function SalesStatCards({ stats, isLoading }: SalesStatCardsProps) {
                 value={`${stats.refundCount} / ${stats.voidCount}`}
                 sub="In selected period"
                 icon={RotateCcw}
+            />
+            <StatCard
+                title="Cancelled"
+                value={stats.cancelledCount}
+                sub="Sales cancelled"
+                icon={XCircle}
             />
         </div>
     )

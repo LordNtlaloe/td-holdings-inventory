@@ -1,12 +1,13 @@
 import type { Id } from "../../convex/_generated/dataModel"
 
-export type SaleStatus = 'completed' | 'refunded' | 'voided'
+export type SaleStatus = 'completed' | 'refunded' | 'voided' | 'cancelled'
 
 export interface Sale {
     _id: Id<'sales'>
     _creationTime: number
     createdAt: number
     storeId: Id<'stores'>
+    customerId?: Id<'customers'>
     store?: {
         _id: Id<'stores'>
         name: string
@@ -19,7 +20,17 @@ export interface Sale {
     status: SaleStatus
     totalAmount: number
     paymentMethod: string
+    paymentSplits?: string        // JSON string of PaymentSplit[]
+    amountReceived?: number
+    changeDue?: number
+    discountTotal?: number
+    cancelledAt?: number
+    cancelledBy?: Id<'users'>
+    cancelledReason?: string
+    originalSaleId?: Id<'sales'>
+    departments?: string[]        // injected by joinSaleDetails
 }
+
 
 export interface SaleItem {
     _id: Id<'saleItems'>
@@ -48,6 +59,7 @@ export interface SalesStats {
     avgOrderValue: number
     refundCount: number
     voidCount: number
+    cancelledCount: number
 }
 
 export interface SalesFiltersType {
@@ -56,4 +68,20 @@ export interface SalesFiltersType {
     search: string
     dateFrom: string
     dateTo: string
+}
+
+export interface CancelledSale {
+    _id: Id<'cancelledSales'>
+    originalSaleId: Id<'sales'>
+    cancelledSaleId: Id<'sales'>
+    cancelledAt: number
+    cancelledBy: Id<'users'>
+    reason?: string
+    originalData: string
+    // Enriched fields
+    cancelledByName?: string
+    storeName?: string
+    originalTotal?: number
+    originalSale?: Sale
+    cancelledSale?: Sale
 }

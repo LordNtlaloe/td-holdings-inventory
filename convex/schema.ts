@@ -148,14 +148,16 @@ export default defineSchema({
     category: v.string(),
     amount: v.number(),
     description: v.optional(v.string()),
-    referenceType: v.optional(v.union(v.literal("sale"), v.literal("purchase"), v.literal("manual"))),
+    referenceType: v.optional(v.union(v.literal("sale"), v.literal("purchase"), v.literal("manual"), v.literal("cancellation"))),
     saleId: v.optional(v.id("sales")),
     purchaseId: v.optional(v.id("purchases")),
+    cancelledSaleId: v.optional(v.id("sales")),
     date: v.number(),
   })
     .index("by_store", ["storeId"])
     .index("by_type", ["type"])
-    .index("by_date", ["date"]),
+    .index("by_date", ["date"])
+    .index("by_cancelled_sale", ["cancelledSaleId"]),
 
   purchases: defineTable({
     storeId: v.id("stores"),
@@ -203,20 +205,21 @@ export default defineSchema({
     customerId: v.optional(v.id("customers")),
     totalAmount: v.number(),
     discountTotal: v.optional(v.number()),
-    status: v.union(v.literal("completed"), v.literal("refunded"), v.literal("voided")),
-    paymentMethod: v.union(
-      v.literal("Cash"),
-      v.literal("POS"),
-      v.literal("Mpesa"),
-      v.literal("Ecocash"),
-      v.literal("Bank Transfer")
-    ),
+    status: v.union(v.literal("completed"), v.literal("refunded"), v.literal("voided"), v.literal("cancelled")),
+    paymentMethod: v.string(),
+    paymentSplits: v.optional(v.string()),
     amountReceived: v.optional(v.number()),
     changeDue: v.optional(v.number()),
     createdAt: v.number(),
+    cancelledAt: v.optional(v.number()),
+    cancelledBy: v.optional(v.id("users")),
+    cancelledReason: v.optional(v.string()),
+    originalSaleId: v.optional(v.id("sales")),
   })
     .index("by_store", ["storeId"])
-    .index("by_customer", ["customerId"]),
+    .index("by_customer", ["customerId"])
+    .index("by_status", ["status"])
+    .index("by_original_sale", ["originalSaleId"]),
 
   saleItems: defineTable({
     saleId: v.id("sales"),
@@ -226,14 +229,17 @@ export default defineSchema({
     size: v.optional(v.string()),
     color: v.optional(v.string()),
     variant: v.optional(v.string()),
+    originalSaleItemId: v.optional(v.id("saleItems")),
   })
     .index("by_sale", ["saleId"])
-    .index("by_product", ["productId"]),
+    .index("by_product", ["productId"])
+    .index("by_original_item", ["originalSaleItemId"]),
 
   saleItemBatches: defineTable({
     saleItemId: v.id("saleItems"),
     batchId: v.id("batches"),
     quantity: v.number(),
+    restoredAt: v.optional(v.number()),
   })
     .index("by_sale_item", ["saleItemId"])
     .index("by_batch", ["batchId"]),
@@ -244,6 +250,41 @@ export default defineSchema({
     discountAmount: v.number(),
     reason: v.optional(v.string()),
   }).index("by_sale", ["saleId"]),
+
+  cancelledSales: defineTable({
+    originalSaleId: v.id("sales"),
+    cancelledSaleId: v.id("sales"),
+    cancelledAt: v.number(),
+    cancelledBy: v.id("users"),
+    reason: v.optional(v.string()),
+    originalData: v.string(),
+  })
+    .index("by_original_sale", ["originalSaleId"])
+    .index("by_cancelled_sale", ["cancelledSaleId"])
+    .index("by_cancelled_by", ["cancelledBy"]),
+
+  // NEW: Sale edit history table
+  saleEdits: defineTable({
+    saleId: v.id("sales"),
+    editedBy: v.id("users"),
+    editedAt: v.number(),
+    reason: v.string(),
+    changes: v.object({
+      paymentMethod: v.optional(v.object({
+        from: v.string(),
+        to: v.string(),
+      })),
+      paymentSplits: v.optional(v.object({
+        from: v.string(),
+        to: v.string(),
+      })),
+    }),
+    originalData: v.string(),
+    newData: v.string(),
+  })
+    .index("by_sale", ["saleId"])
+    .index("by_edited_by", ["editedBy"])
+    .index("by_edited_at", ["editedAt"]),
 
   activityLogs: defineTable({
     userId: v.id("users"),

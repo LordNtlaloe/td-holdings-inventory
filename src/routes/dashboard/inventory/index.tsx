@@ -2,6 +2,8 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useMutation } from 'convex/react'
 import { useState, useMemo } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '#/components/ui/tabs'
+import { Button } from '#/components/ui/button'
+import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import AppLayout from '#/layouts/app-layout'
 import { api } from '../../../../convex/_generated/api'
@@ -101,9 +103,9 @@ function RouteComponent() {
   // Filter inventory items for the Receive Batch dialog
   const filteredInventoryItems = useMemo(() => {
     if (!inventoryItems) return []
+    if (!batchDepartmentId) return inventoryItems
     return inventoryItems.filter((item) => {
-      if (batchDepartmentId && item.product?.departmentId !== batchDepartmentId) return false
-      return true
+      return item.product?.departmentId === batchDepartmentId
     })
   }, [inventoryItems, batchDepartmentId])
 
@@ -164,19 +166,30 @@ function RouteComponent() {
   }
 
   const openReceiveBatchDialog = (productId?: string, suggestedQuantity = 1) => {
-    const eligible = productId ? isProductEligibleForBatch(productId, batches) : true
-    const resolvedProductId = eligible ? (productId ?? null) : null
-
-    setBatchProductId(resolvedProductId)
+    // Reset state
+    setBatchProductId(null)
     setBatchDepartmentId(null)
+    setReceiveBatchError(null)
+
+    // Generate batch number
     setBatchNumber(generateBatchNumber())
     setBatchQuantity(suggestedQuantity)
 
-    const product = resolvedProductId
-      ? inventoryItems?.find((item) => item.productId === resolvedProductId)?.product
-      : null
-    setBatchCostPrice(product?.costPrice || 0)
-    setReceiveBatchError(null)
+    // Set cost price if product is provided
+    if (productId) {
+      const product = inventoryItems?.find((item) => item.productId === productId)?.product
+      setBatchCostPrice(product?.costPrice || 0)
+      setBatchProductId(productId)
+
+      // Set department filter based on product
+      const departmentId = product?.departmentId
+      if (departmentId) {
+        setBatchDepartmentId(departmentId)
+      }
+    } else {
+      setBatchCostPrice(0)
+    }
+
     setReceiveBatchDialogOpen(true)
   }
 
@@ -302,6 +315,9 @@ function RouteComponent() {
     setReorderDialogOpen(true)
   }
 
+  // Check if a store is selected
+  const hasStoreSelected = !!selectedStoreId
+
   return (
     <AppLayout>
       <div className="space-y-6 p-6">
@@ -313,11 +329,20 @@ function RouteComponent() {
               Manage stock, batches, and inventory assignments across stores
             </p>
           </div>
-          <InventoryStoreSelector
-            stores={stores}
-            selectedStoreId={selectedStoreId}
-            onStoreChange={setSelectedStoreId}
-          />
+          <div className="flex items-center gap-4">
+            <InventoryStoreSelector
+              stores={stores}
+              selectedStoreId={selectedStoreId}
+              onStoreChange={setSelectedStoreId}
+            />
+            <Button
+              onClick={() => setAssignDialogOpen(true)}
+              disabled={!hasStoreSelected}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Assign Product
+            </Button>
+          </div>
         </div>
 
         {/* Stats Cards */}
@@ -405,7 +430,7 @@ function RouteComponent() {
             }
           }}
           departments={departments}
-          inventoryItems={filteredInventoryItems}
+          inventoryItems={inventoryItems}
           selectedDepartmentId={batchDepartmentId}
           selectedProductId={batchProductId}
           batchNumber={batchNumber}
@@ -419,7 +444,10 @@ function RouteComponent() {
           onSubmit={handleReceiveBatch}
           isLoading={receivingBatch}
           error={receiveBatchError}
-          isProductEligible={(productId) => isProductEligibleForBatch(productId, batches)}
+          isProductEligible={(productId) => {
+            if (!batches) return true
+            return isProductEligibleForBatch(productId, batches)
+          }}
         />
 
         <ReorderLevelDialog

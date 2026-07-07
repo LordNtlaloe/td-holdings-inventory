@@ -21,6 +21,7 @@ import { Jimp } from "jimp"
 
 const LOGO_URL = "https://res.cloudinary.com/ntlaloe-org/image/upload/w_384,f_png/v1782201264/TD_Holdings_mm9zfc.png"
 const LOGO_MAX_WIDTH = 240
+const PRINT_SERVER_URL = "https://smell-outplayed-hypnotic.ngrok-free.dev/api/print"
 
 // ===============================
 // HELPERS
@@ -61,6 +62,31 @@ async function nodeImageReader(src: string): Promise<{
         width: image.bitmap.width,
         height: image.bitmap.height,
     }
+}
+
+/**
+ * Truncates a name to show only the first part (before space or comma)
+ * Examples:
+ * - "John Doe" -> "John"
+ * - "Jane Smith, Manager" -> "Jane"
+ * - "Dr. Michael Johnson" -> "Dr. Michael"
+ */
+function getShortName(fullName: string): string {
+    if (!fullName) return ''
+
+    // Remove any titles/roles after comma
+    const nameWithoutTitle = fullName.split(',')[0].trim()
+
+    // Take first name (before first space)
+    const nameParts = nameWithoutTitle.split(' ')
+
+    // If there's a title like "Dr." or "Mr.", include it with the first name
+    if (nameParts.length > 1 && nameParts[0].endsWith('.')) {
+        return `${nameParts[0]} ${nameParts[1]}`
+    }
+
+    // Otherwise just return the first part (usually the first name)
+    return nameParts[0] || fullName
 }
 
 // ===============================
@@ -222,12 +248,18 @@ export const printReceipt = action({
         )
         children.push(React.createElement(Br, null))
 
+        // Show cashier with truncated name (first name only)
         if (args.cashierName) {
-            children.push(React.createElement(Text, null, `Cashier: ${args.cashierName}`))
+            const shortCashierName = getShortName(args.cashierName)
+            children.push(React.createElement(Text, null, `Cashier: ${shortCashierName}`))
         }
+
+        // Show customer with truncated name (first name only)
         if (args.customerName) {
-            children.push(React.createElement(Text, null, `Customer: ${args.customerName}`))
+            const shortCustomerName = getShortName(args.customerName)
+            children.push(React.createElement(Text, null, `Customer: ${shortCustomerName}`))
         }
+
         children.push(React.createElement(Text, null, `Payment: ${args.paymentMethod}`))
 
         if (args.paymentMethod === "Cash" && args.amountReceived !== undefined) {
@@ -391,17 +423,34 @@ export const printReceipt = action({
         try {
             const data = await render(receipt)
 
-            const response = await fetch(
-                "https://emerging-composed-meerkat.ngrok-free.app/api/print",
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        receiptData: Array.from(data),
-                        paymentMethod: args.paymentMethod,
-                    }),
-                }
-            )
+            const response = await fetch(PRINT_SERVER_URL, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    // Free-tier ngrok tunnels serve an HTML interstitial warning
+                    // page to any request missing this header, instead of
+                    // proxying through to the local print server. Without it,
+                    // response.json() below fails on the HTML page.
+                    "ngrok-skip-browser-warning": "true",
+                },
+                body: JSON.stringify({
+                    receiptData: Array.from(data),
+                    paymentMethod: args.paymentMethod,
+                }),
+            })
+
+            if (!response.ok) {
+                const text = await response.text()
+                throw new Error(
+                    `Print server returned ${response.status}: ${text.slice(0, 200)}`
+                )
+            }
+
+            const contentType = response.headers.get("content-type") || ""
+            if (!contentType.includes("application/json")) {
+                const text = await response.text()
+                throw new Error(`Expected JSON from print server, got: ${text.slice(0, 200)}`)
+            }
 
             const result = await response.json()
             if (!result.success) throw new Error(result.error || "Failed to print")

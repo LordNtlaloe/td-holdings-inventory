@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useQuery, useMutation } from 'convex/react'
 import {
     Dialog,
@@ -103,6 +103,34 @@ export function ProductForm({
     const departments = useQuery(api.departments.getAllDepartments)
     const createProduct = useMutation(api.products.createProduct)
     const updateProduct = useMutation(api.products.updateProduct)
+
+    // Get the department of the selected category
+    const selectedCategory = useMemo(() => {
+        return categories?.find((c: Category) => c._id === categoryId)
+    }, [categories, categoryId])
+
+    // Filter departments based on the selected category
+    const availableDepartments = useMemo(() => {
+        if (!departments) return []
+        if (!selectedCategory) return departments
+
+        // Only show the department that the category belongs to
+        return departments.filter((d: Department) => d._id === selectedCategory.departmentId)
+    }, [departments, selectedCategory])
+
+    // Auto-select department when category changes
+    useEffect(() => {
+        if (selectedCategory && selectedCategory.departmentId) {
+            const deptId = selectedCategory.departmentId
+            if (departmentId !== deptId) {
+                setDepartmentId(deptId)
+                if (errors.departmentId) {
+                    setErrors((prev) => ({ ...prev, departmentId: undefined }))
+                }
+                if (error) setError(null)
+            }
+        }
+    }, [selectedCategory, departmentId, errors.departmentId, error])
 
     // Sync external error
     useEffect(() => {
@@ -269,12 +297,8 @@ export function ProductForm({
 
     const handleCategoryChange = (value: string) => {
         setCategoryId(value)
+        // Department will be auto-set by the useEffect
         if (errors.categoryId) setErrors((prev) => ({ ...prev, categoryId: undefined }))
-        if (error) setError(null)
-    }
-
-    const handleDepartmentChange = (value: string) => {
-        setDepartmentId(value)
         if (errors.departmentId) setErrors((prev) => ({ ...prev, departmentId: undefined }))
         if (error) setError(null)
     }
@@ -459,6 +483,13 @@ export function ProductForm({
 
     const isEditing = mode === 'edit'
 
+    // Get the department name for display
+    const selectedDepartmentName = useMemo(() => {
+        if (!departmentId || !departments) return ''
+        const dept = departments.find((d: Department) => d._id === departmentId)
+        return dept?.name || ''
+    }, [departmentId, departments])
+
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
@@ -550,27 +581,19 @@ export function ProductForm({
                             Department
                         </Label>
                         <div className="col-span-3 min-w-0">
-                            <Select
-                                value={departmentId}
-                                onValueChange={handleDepartmentChange}
-                                disabled={!departments || loading}
-                            >
-                                <SelectTrigger
-                                    className={cn('w-full', errors.departmentId && 'border-destructive focus-visible:ring-destructive')}
-                                >
-                                    <SelectValue placeholder="Select a department" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {departments?.map((dept: Department) => (
-                                        <SelectItem key={dept._id} value={dept._id}>
-                                            {dept.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <Input
+                                id="department"
+                                value={selectedDepartmentName || 'Select a category first'}
+                                disabled
+                                className="bg-muted cursor-not-allowed"
+                            />
+                            <input type="hidden" value={departmentId} />
                             {errors.departmentId && (
                                 <p className="text-xs text-destructive mt-1">{errors.departmentId}</p>
                             )}
+                            <p className="text-xs text-muted-foreground mt-1">
+                                Department is automatically set based on the selected category.
+                            </p>
                         </div>
                     </div>
 

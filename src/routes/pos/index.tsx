@@ -11,6 +11,8 @@ import {
   Receipt,
   Loader2,
   Package,
+  PlusCircle,
+  X,
 } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { Input } from '#/components/ui/input'
@@ -79,9 +81,17 @@ type CartLine = {
   availableQuantity: number
   departmentId: string
   departmentName: string
+  manualDiscount?: number
 }
 
-type PaymentMethod = 'Cash' | 'POS' | 'Mpesa' | 'Ecocash' | 'Bank Transfer'
+type PaymentMethod = 'Cash' | 'Card' | 'Mpesa' | 'Ecocash' | 'Bank Transfer' | 'Mobile Payment' | 'Credit' | 'Voucher'
+
+type PaymentSplit = {
+  method: PaymentMethod
+  amount: number
+  amountReceived?: number
+  changeDue?: number
+}
 
 type SaleDiscount = {
   productId: string
@@ -96,7 +106,8 @@ type CompletedSale = {
   storeAddress: string | null
   customerName: string | null
   cashierName: string | null
-  paymentMethod: PaymentMethod
+  paymentMethod: string
+  payments: PaymentSplit[]
   items: CartLine[]
   discounts: SaleDiscount[]
   total: number
@@ -130,6 +141,38 @@ function formatCurrency(amount: number) {
   return `R${amount.toFixed(2)}`
 }
 
+// Mirror of backend discount logic — keeps frontend totals in sync with server
+function computeFrontendDiscounts(cart: CartLine[]): number {
+  const TYRE_DISCOUNT_THRESHOLD = 4
+  const TYRE_DISCOUNT_AMOUNT = 200
+
+  function extractRimSize(sizeStr: string): number | null {
+    const m =
+      sizeStr.match(/[Rr](\d+)$/) ||
+      sizeStr.match(/^(\d+)$/) ||
+      sizeStr.match(/(\d+)$/)
+    return m ? parseInt(m[1], 10) : null
+  }
+
+  // Aggregate tyre quantities by productId (same grouping as backend)
+  const productQty: Record<string, number> = {}
+  for (const line of cart) {
+    if (!line.departmentName.toLowerCase().includes('tyre')) continue
+    if (!line.size) continue
+    const rim = extractRimSize(line.size)
+    if (rim === null || rim < 14) continue
+    productQty[line.productId] = (productQty[line.productId] || 0) + line.quantity
+  }
+
+  let autoDiscountTotal = 0
+  for (const qty of Object.values(productQty)) {
+    if (qty >= TYRE_DISCOUNT_THRESHOLD) autoDiscountTotal += TYRE_DISCOUNT_AMOUNT
+  }
+
+  const manualDiscountTotal = cart.reduce((sum, l) => sum + (l.manualDiscount || 0), 0)
+  return autoDiscountTotal + manualDiscountTotal
+}
+
 function RouteComponent() {
   const [storeId, setStoreId] = useState<string | null>(null)
   const [customerName, setCustomerName] = useState('')
@@ -140,9 +183,13 @@ function RouteComponent() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [completedSale, setCompletedSale] = useState<CompletedSale | null>(null)
   const [receiptPrinted, setReceiptPrinted] = useState(false)
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null)
-  const [amountReceived, setAmountReceived] = useState<number | null>(null)
-  const [changeDue, setChangeDue] = useState<number | null>(null)
+
+  // Split payment state
+  const [payments, setPayments] = useState<PaymentSplit[]>([
+    { method: 'Cash', amount: 0, amountReceived: 0, changeDue: 0 }
+  ])
+  const [isSplitPayment, setIsSplitPayment] = useState(false)
+
   const [pickerItem, setPickerItem] = useState<InventoryItem | null>(null)
   const [pickerSize, setPickerSize] = useState<string | null>(null)
   const [pickerColor, setPickerColor] = useState<string | null>(null)
@@ -190,10 +237,17 @@ function RouteComponent() {
     })
   }, [inventory, departmentId, search])
 
+  // Gross total before any discounts (what you see in the cart)
   const cartTotal = useMemo(
     () => cart.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0),
     [cart]
   )
+
+  // Discount total (auto tyre + manual) — mirrors backend logic exactly
+  const discountTotal = useMemo(() => computeFrontendDiscounts(cart), [cart])
+
+  // Net total that will actually be charged — this is what payments must sum to
+  const netTotal = useMemo(() => Math.max(0, cartTotal - discountTotal), [cartTotal, discountTotal])
 
   const cartItemCount = useMemo(
     () => cart.reduce((sum, line) => sum + line.quantity, 0),
@@ -204,6 +258,75 @@ function RouteComponent() {
     cart
       .filter((line) => line.productId === productId)
       .reduce((sum, line) => sum + line.quantity, 0)
+
+  // ── Payment split helpers ──────────────────────────────────────────
+
+  const totalPaymentAmount = useMemo(() => {
+    return payments.reduce((sum, p) => sum + p.amount, 0)
+  }, [payments])
+
+  const totalAmountReceived = useMemo(() => {
+    return payments.reduce((sum, p) => sum + (p.amountReceived || p.amount), 0)
+  }, [payments])
+
+  const totalChangeDue = useMemo(() => {
+    return payments.reduce((sum, p) => sum + (p.changeDue || 0), 0)
+  }, [payments])
+
+  const addPaymentSplit = () => {
+    // Find methods not already used
+    const usedMethods = payments.map(p => p.method)
+    const availableMethods = ['Cash', 'Card', 'Mpesa', 'Ecocash', 'Bank Transfer', 'Mobile Payment', 'Credit', 'Voucher']
+      .filter(m => !usedMethods.includes(m as PaymentMethod))
+
+    if (availableMethods.length === 0) {
+      toast.error('All payment methods are already added')
+      return
+    }
+
+    setPayments([
+      ...payments,
+      {
+        method: availableMethods[0] as PaymentMethod,
+        amount: 0,
+        ...(availableMethods[0] === 'Cash' ? { amountReceived: 0, changeDue: 0 } : {})
+      }
+    ])
+  }
+
+  const removePaymentSplit = (index: number) => {
+    if (payments.length <= 1) {
+      toast.error('At least one payment method is required')
+      return
+    }
+    setPayments(payments.filter((_, i) => i !== index))
+  }
+
+  const updatePaymentSplit = (index: number, field: keyof PaymentSplit, value: any) => {
+    const updated = [...payments]
+    updated[index] = { ...updated[index], [field]: value }
+
+    // Auto-calculate change for cash
+    if (field === 'amountReceived' && updated[index].method === 'Cash') {
+      const amount = updated[index].amount || 0
+      const received = value || 0
+      updated[index].changeDue = Math.max(0, received - amount)
+    }
+    if (field === 'amount' && updated[index].method === 'Cash') {
+      const amount = value || 0
+      const received = updated[index].amountReceived || 0
+      updated[index].changeDue = Math.max(0, received - amount)
+    }
+
+    setPayments(updated)
+  }
+
+  const resetPayments = () => {
+    setPayments([
+      { method: 'Cash', amount: 0, amountReceived: 0, changeDue: 0 }
+    ])
+    setIsSplitPayment(false)
+  }
 
   // ── Cart handlers ────────────────────────────────────────────────────
 
@@ -250,6 +373,7 @@ function RouteComponent() {
           availableQuantity: item.quantity,
           departmentId: product.departmentId,
           departmentName,
+          manualDiscount: 0,
         },
       ]
     })
@@ -325,6 +449,16 @@ function RouteComponent() {
     )
   }
 
+  const updateCartDiscount = (key: string, discount: number) => {
+    setCart((prev) =>
+      prev.map((line) =>
+        cartKey(line.productId, line.size, line.color, line.variant) === key
+          ? { ...line, manualDiscount: Math.max(0, discount) }
+          : line
+      )
+    )
+  }
+
   const removeFromCart = (key: string) => {
     setCart((prev) =>
       prev.filter((line) => cartKey(line.productId, line.size, line.color, line.variant) !== key)
@@ -334,9 +468,7 @@ function RouteComponent() {
   const clearCart = () => {
     setCart([])
     setCustomerName('')
-    setPaymentMethod('Cash')
-    setAmountReceived(null)
-    setChangeDue(null)
+    resetPayments()
   }
 
   // ── Checkout ─────────────────────────────────────────────────────────
@@ -344,20 +476,26 @@ function RouteComponent() {
   const handleCheckout = async () => {
     if (!storeId) { toast.error('Select a store first'); return }
     if (cart.length === 0) { toast.error('Cart is empty'); return }
-    if (!paymentMethod) { toast.error('Select a payment method'); return }
 
-    let resolvedChangeDue: number | null = changeDue
-    if (paymentMethod === 'Cash') {
-      if (!amountReceived || amountReceived <= 0) {
-        toast.error('Enter amount received for cash payment')
+    // Validate against netTotal (post-discount), matching what the server will compute
+    const totalPayment = payments.reduce((sum, p) => sum + p.amount, 0)
+    if (Math.abs(totalPayment - netTotal) > 0.01) {
+      toast.error(`Payment total (${formatCurrency(totalPayment)}) does not match sale total (${formatCurrency(netTotal)})`)
+      return
+    }
+
+    // Validate cash payments
+    for (const payment of payments) {
+      if (payment.method === 'Cash') {
+        if (!payment.amountReceived || payment.amountReceived < payment.amount) {
+          toast.error(`Cash payment of ${formatCurrency(payment.amount)} requires amount received >= ${formatCurrency(payment.amount)}`)
+          return
+        }
+      }
+      if (payment.amount <= 0) {
+        toast.error('Each payment amount must be greater than zero')
         return
       }
-      if (amountReceived < cartTotal) {
-        toast.error(`Amount received (${formatCurrency(amountReceived)}) is less than total (${formatCurrency(cartTotal)})`)
-        return
-      }
-      resolvedChangeDue = amountReceived - cartTotal
-      setChangeDue(resolvedChangeDue)
     }
 
     setIsSubmitting(true)
@@ -373,9 +511,12 @@ function RouteComponent() {
       const saleId = await createSale({
         storeId: storeId as any,
         customerId: resolvedCustomerId ? (resolvedCustomerId as any) : undefined,
-        paymentMethod,
-        amountReceived: paymentMethod === 'Cash' ? amountReceived ?? undefined : undefined,
-        changeDue: paymentMethod === 'Cash' ? resolvedChangeDue ?? undefined : undefined,
+        payments: payments.map(p => ({
+          method: p.method,
+          amount: p.amount,
+          amountReceived: p.method === 'Cash' ? p.amountReceived : undefined,
+          changeDue: p.method === 'Cash' ? p.changeDue : undefined,
+        })),
         items: cart.map((line) => ({
           productId: line.productId as any,
           quantity: line.quantity,
@@ -383,38 +524,21 @@ function RouteComponent() {
           size: line.size,
           color: line.color,
           variant: line.variant,
-          // Pass departmentName so the server can run tyre discount logic
-          // without extra lookups.
           departmentName: line.departmentName,
+          manualDiscount: line.manualDiscount || 0,
         })),
       })
 
       if (resolvedCustomerId) {
         await recordPurchase({
           customerId: resolvedCustomerId as any,
-          amount: cartTotal,
+          amount: netTotal,
         })
       }
 
-      // Fetch the discount rows the server just wrote so the receipt has them.
-      // We do a quick query via the action args rather than a useQuery hook
-      // because this is one-time post-sale data. We pass an empty array as
-      // a safe fallback — the server already wrote the discount total into
-      // the sale row itself regardless.
-      let discounts: SaleDiscount[] = []
+      // Reconstruct discounts for the receipt display
+      const receiptDiscounts: SaleDiscount[] = []
       try {
-        // getSaleById returns discounts[] joined from saleDiscounts
-        const saleDetail = await (async () => {
-          // Can't call a query imperatively in Convex — use the already-fetched
-          // sale data we have. The server computed and stored the discounts;
-          // we reconstruct them client-side from the cart for the receipt only.
-          // This mirrors what the server computed so the receipt stays accurate.
-          return null
-        })()
-
-        // Since we can't call a Convex query imperatively, we reconstruct
-        // discounts from the cart using the same logic the server used.
-        // This is display-only — the authoritative values are in the DB.
         const TYRE_DISCOUNT_THRESHOLD = 4
         const TYRE_DISCOUNT_AMOUNT = 200
 
@@ -441,25 +565,33 @@ function RouteComponent() {
 
         for (const [productId, { qty }] of Object.entries(productQty)) {
           if (qty >= TYRE_DISCOUNT_THRESHOLD) {
-            discounts.push({
+            receiptDiscounts.push({
               productId,
               discountAmount: TYRE_DISCOUNT_AMOUNT,
               reason: `Tyre bulk discount (${qty}x, size 14+)`,
             })
           }
         }
+
+        for (const line of cart) {
+          if (line.manualDiscount && line.manualDiscount > 0) {
+            receiptDiscounts.push({
+              productId: line.productId,
+              discountAmount: line.manualDiscount,
+              reason: 'Manual discount',
+            })
+          }
+        }
       } catch {
-        // Non-fatal — receipt still prints without discount lines
-        discounts = []
+        // receiptDiscounts stays empty — non-fatal
       }
 
       const cashierName = currentUser?.name || currentUser?.email || 'Unknown'
       const currentStore = myStore ?? activeStores.find((s) => s._id === storeId)
 
-      // The server deducted discounts from totalAmount; use the net total
-      // that was actually charged, not the raw cartTotal.
-      const discountTotal = discounts.reduce((sum, d) => sum + d.discountAmount, 0)
-      const netTotal = cartTotal - discountTotal
+      const paymentLabel = payments.length === 1
+        ? payments[0].method
+        : payments.map(p => p.method).join(' + ')
 
       setCompletedSale({
         saleId: saleId.toString(),
@@ -468,14 +600,15 @@ function RouteComponent() {
         storeAddress: currentStore?.address ?? null,
         customerName: resolvedCustomerName,
         cashierName,
-        paymentMethod,
+        paymentMethod: paymentLabel,
+        payments: payments,
         items: cart,
-        discounts,
+        discounts: receiptDiscounts,
         total: netTotal,
         itemCount: cartItemCount,
         completedAt: Date.now(),
-        amountReceived: paymentMethod === 'Cash' ? amountReceived ?? undefined : undefined,
-        changeDue: paymentMethod === 'Cash' ? resolvedChangeDue ?? undefined : undefined,
+        amountReceived: totalAmountReceived,
+        changeDue: totalChangeDue,
       })
 
       setReceiptPrinted(false)
@@ -493,6 +626,20 @@ function RouteComponent() {
   const handlePrint = async () => {
     if (!completedSale) return
     try {
+      const receiptItems = completedSale.items.map(item => ({
+        productId: item.productId,
+        name: item.name,
+        sku: item.sku,
+        size: item.size,
+        color: item.color,
+        variant: item.variant,
+        unitPrice: item.unitPrice,
+        quantity: item.quantity,
+        availableQuantity: item.availableQuantity,
+        departmentId: item.departmentId,
+        departmentName: item.departmentName,
+      }))
+
       const result = await printReceipt({
         saleId: completedSale.saleId,
         storeName: completedSale.storeName,
@@ -503,11 +650,7 @@ function RouteComponent() {
         paymentMethod: completedSale.paymentMethod,
         amountReceived: completedSale.amountReceived,
         changeDue: completedSale.changeDue,
-        items: completedSale.items.map(item => ({
-          ...item,
-          departmentId: item.departmentId || 'unknown',
-          departmentName: item.departmentName || 'General',
-        })),
+        items: receiptItems,
         discounts: completedSale.discounts,
         total: completedSale.total,
         itemCount: completedSale.itemCount,
@@ -526,19 +669,47 @@ function RouteComponent() {
     }
   }
 
+  const closeCheckoutDialog = () => {
+    setCheckoutOpen(false)
+    setCompletedSale(null)
+    setReceiptPrinted(false)
+    resetPayments()
+  }
+
   const handleCheckoutDialogOpenChange = (open: boolean) => {
-    if (!open && completedSale && !receiptPrinted) {
-      toast.warning('Please print the receipt before closing')
-      return
-    }
     if (!open) {
-      setCheckoutOpen(false)
-      setCompletedSale(null)
-      setReceiptPrinted(false)
-      setPaymentMethod('Cash')
-      setAmountReceived(null)
-      setChangeDue(null)
+      if (completedSale && !receiptPrinted) {
+        if (confirm('You haven\'t printed the receipt. Are you sure you want to close without printing?')) {
+          closeCheckoutDialog()
+        }
+        return
+      }
+      closeCheckoutDialog()
     } else {
+      // Seed payment amounts from netTotal (post-discount), not cartTotal
+      if (payments.length === 1) {
+        const singlePayment = payments[0]
+        setPayments([{
+          ...singlePayment,
+          amount: netTotal,
+          ...(singlePayment.method === 'Cash' ? {
+            amountReceived: netTotal,
+            changeDue: 0
+          } : {})
+        }])
+      } else {
+        const perPayment = netTotal / payments.length
+        setPayments(payments.map((p, i) => ({
+          ...p,
+          amount: i === payments.length - 1
+            ? netTotal - (perPayment * (payments.length - 1))
+            : perPayment,
+          ...(p.method === 'Cash' ? {
+            amountReceived: p.amountReceived || 0,
+            changeDue: 0
+          } : {})
+        })))
+      }
       setCheckoutOpen(true)
     }
   }
@@ -759,8 +930,18 @@ function RouteComponent() {
                     </div>
                   </div>
 
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Discount:</span>
+                    <Input
+                      type="number" min={0} step={0.01}
+                      value={line.manualDiscount || 0}
+                      onChange={(e) => updateCartDiscount(key, Number(e.target.value))}
+                      className="h-7 w-20 text-right"
+                    />
+                  </div>
+
                   <p className="text-right text-sm font-medium">
-                    {formatCurrency(line.unitPrice * line.quantity)}
+                    {formatCurrency((line.unitPrice * line.quantity) - (line.manualDiscount || 0))}
                   </p>
                 </div>
               )
@@ -772,9 +953,21 @@ function RouteComponent() {
               <span>Items</span>
               <span>{cartItemCount}</span>
             </div>
+            {discountTotal > 0 && (
+              <>
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                  <span>Subtotal</span>
+                  <span>{formatCurrency(cartTotal)}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm text-green-600">
+                  <span>Discounts</span>
+                  <span>−{formatCurrency(discountTotal)}</span>
+                </div>
+              </>
+            )}
             <div className="flex items-center justify-between text-lg font-semibold">
               <span>Total</span>
-              <span>{formatCurrency(cartTotal)}</span>
+              <span>{formatCurrency(netTotal)}</span>
             </div>
           </div>
 
@@ -870,97 +1063,161 @@ function RouteComponent() {
 
       {/* Checkout / receipt dialog */}
       <Dialog open={checkoutOpen} onOpenChange={handleCheckoutDialogOpenChange}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           {!completedSale ? (
             <>
               <DialogHeader>
                 <DialogTitle>Confirm Sale</DialogTitle>
                 <DialogDescription>
-                  {cartItemCount} item(s) — {formatCurrency(cartTotal)} total
+                  {cartItemCount} item(s) —{' '}
+                  {discountTotal > 0
+                    ? `${formatCurrency(cartTotal)} − ${formatCurrency(discountTotal)} discount = `
+                    : ''}
+                  {formatCurrency(netTotal)} total
                   {customerName.trim() ? ` for ${customerName.trim()}` : ' (walk-in)'}
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="space-y-4 py-2">
-                <div className="space-y-2">
-                  <Label>Payment Method</Label>
-                  <Select
-                    value={paymentMethod ?? ''}
-                    onValueChange={(value) => {
-                      setPaymentMethod(value === 'placeholder' ? null : (value as PaymentMethod))
-                      if (value !== 'Cash') { setAmountReceived(null); setChangeDue(null) }
+              <div className="space-y-4 py-2 max-h-[60vh] overflow-y-auto">
+                {/* Split payment toggle */}
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant={!isSplitPayment ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => {
+                      setIsSplitPayment(false)
+                      setPayments([{ method: 'Cash', amount: netTotal, amountReceived: netTotal, changeDue: 0 }])
                     }}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select payment method" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="placeholder" disabled>Select payment method</SelectItem>
-                      <SelectItem value="Cash">Cash</SelectItem>
-                      <SelectItem value="Card">Card</SelectItem>
-                      <SelectItem value="Mobile Payment">Mobile Payment</SelectItem>
-                      <SelectItem value="Credit">Credit</SelectItem>
-                      <SelectItem value="Voucher">Voucher</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    Single Payment
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={isSplitPayment ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => {
+                      setIsSplitPayment(true)
+                      const perPayment = netTotal / 2
+                      setPayments([
+                        { method: 'Cash', amount: perPayment, amountReceived: perPayment, changeDue: 0 },
+                        { method: 'Mpesa', amount: perPayment }
+                      ])
+                    }}
+                  >
+                    Split Payment
+                  </Button>
                 </div>
 
-                {paymentMethod === 'Cash' && (
-                  <div className="space-y-2">
-                    <div className="space-y-1">
-                      <Label>Amount Received</Label>
-                      <Input
-                        type="number" min={0} step={0.01}
-                        placeholder="Enter amount received"
-                        value={amountReceived || ''}
-                        onChange={(e) => {
-                          const val = parseFloat(e.target.value)
-                          setAmountReceived(isNaN(val) ? null : val)
-                          if (val !== null && !isNaN(val) && cartTotal > 0) {
-                            setChangeDue(val - cartTotal)
-                          } else {
-                            setChangeDue(null)
-                          }
-                        }}
-                      />
-                    </div>
-                    {amountReceived !== null && !isNaN(amountReceived) && (
-                      <div className="space-y-1">
-                        <Label>Change Due</Label>
-                        <Input
-                          type="text"
-                          value={changeDue !== null && changeDue > 0 ? formatCurrency(changeDue) : 'R0.00'}
-                          disabled className="bg-muted"
-                        />
+                {/* Payment splits */}
+                <div className="space-y-3">
+                  {payments.map((payment, index) => (
+                    <div key={index} className="rounded-lg border p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Select
+                            value={payment.method}
+                            onValueChange={(value) => updatePaymentSplit(index, 'method', value as PaymentMethod)}
+                          >
+                            <SelectTrigger className="w-35">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Cash">Cash</SelectItem>
+                              <SelectItem value="Card">Card</SelectItem>
+                              <SelectItem value="Mpesa">Mpesa</SelectItem>
+                              <SelectItem value="Ecocash">Ecocash</SelectItem>
+                              <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                              <SelectItem value="Mobile Payment">Mobile Payment</SelectItem>
+                              <SelectItem value="Credit">Credit</SelectItem>
+                              <SelectItem value="Voucher">Voucher</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {payments.length > 1 && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0"
+                              onClick={() => removePaymentSplit(index)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                        <span className="text-sm font-medium">
+                          {formatCurrency(payment.amount)}
+                        </span>
                       </div>
-                    )}
-                  </div>
-                )}
-              </div>
 
-              <div className="max-h-64 space-y-2 overflow-y-auto py-2">
-                {cart.map((line) => {
-                  const key = cartKey(line.productId, line.size, line.color, line.variant)
-                  const optionLabel = [line.size, line.color, line.variant].filter(Boolean).join(' / ')
-                  return (
-                    <div key={key} className="flex items-center justify-between text-sm">
-                      <span>
-                        {line.quantity} × {line.name}
-                        {optionLabel ? ` (${optionLabel})` : ''}
-                      </span>
-                      <span className="font-medium">
-                        {formatCurrency(line.unitPrice * line.quantity)}
-                      </span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-xs">Amount</Label>
+                          <Input
+                            type="number" min={0} step={0.01}
+                            value={payment.amount || ''}
+                            onChange={(e) => updatePaymentSplit(index, 'amount', Number(e.target.value))}
+                            className="h-8"
+                          />
+                        </div>
+                        {payment.method === 'Cash' && (
+                          <>
+                            <div>
+                              <Label className="text-xs">Received</Label>
+                              <Input
+                                type="number" min={0} step={0.01}
+                                value={payment.amountReceived || ''}
+                                onChange={(e) => updatePaymentSplit(index, 'amountReceived', Number(e.target.value))}
+                                className="h-8"
+                              />
+                            </div>
+                            <div className="col-span-2">
+                              <Label className="text-xs">Change Due</Label>
+                              <Input
+                                type="text"
+                                value={formatCurrency(payment.changeDue || 0)}
+                                disabled
+                                className="h-8 bg-muted"
+                              />
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
-                  )
-                })}
+                  ))}
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={addPaymentSplit}
+                    disabled={payments.length >= 8}
+                  >
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Add Payment Method
+                  </Button>
+
+                  <div className="flex justify-between border-t pt-2">
+                    <span className="font-medium">Total Payment:</span>
+                    <span className={Math.abs(totalPaymentAmount - netTotal) < 0.01 ? 'font-medium text-green-600' : 'font-medium text-red-600'}>
+                      {formatCurrency(totalPaymentAmount)}
+                      {Math.abs(totalPaymentAmount - netTotal) >= 0.01 && (
+                        <span className="ml-1 text-xs">(Short by {formatCurrency(netTotal - totalPaymentAmount)})</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
               </div>
 
               <DialogFooter>
                 <Button variant="outline" onClick={() => setCheckoutOpen(false)} disabled={isSubmitting}>
                   Cancel
                 </Button>
-                <Button onClick={handleCheckout} disabled={isSubmitting}>
+                <Button
+                  onClick={handleCheckout}
+                  disabled={isSubmitting || Math.abs(totalPaymentAmount - netTotal) > 0.01}
+                >
                   {isSubmitting ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
@@ -981,14 +1238,16 @@ function RouteComponent() {
 
               <div className="space-y-2 text-sm">
                 <p><span className="font-medium">Payment:</span> {completedSale.paymentMethod}</p>
-                {completedSale.paymentMethod === 'Cash' && completedSale.amountReceived && (
-                  <>
-                    <p><span className="font-medium">Amount Received:</span> {formatCurrency(completedSale.amountReceived)}</p>
-                    {completedSale.changeDue && completedSale.changeDue > 0 && (
-                      <p><span className="font-medium">Change Due:</span> {formatCurrency(completedSale.changeDue)}</p>
+                {completedSale.payments.map((p, i) => (
+                  <div key={i} className="ml-4 text-xs">
+                    <span className="font-medium">{p.method}:</span> {formatCurrency(p.amount)}
+                    {p.method === 'Cash' && p.amountReceived && (
+                      <span className="text-muted-foreground">
+                        {' '}(Received: {formatCurrency(p.amountReceived)}, Change: {formatCurrency(p.changeDue || 0)})
+                      </span>
                     )}
-                  </>
-                )}
+                  </div>
+                ))}
                 {completedSale.discounts.length > 0 && (
                   <p>
                     <span className="font-medium">Discounts Applied:</span>{' '}
@@ -1006,18 +1265,22 @@ function RouteComponent() {
               <p className="text-sm text-muted-foreground">
                 {receiptPrinted
                   ? 'Receipt printed. You can now close this dialog.'
-                  : 'Print the receipt before closing.'}
+                  : 'Print the receipt before closing, or close without printing.'}
               </p>
 
-              <DialogFooter>
+              <DialogFooter className="flex flex-col sm:flex-row gap-2">
                 <Button
                   variant="outline"
-                  onClick={() => handleCheckoutDialogOpenChange(false)}
-                  disabled={!receiptPrinted}
+                  onClick={closeCheckoutDialog}
+                  className="sm:order-1"
                 >
-                  Close
+                  {receiptPrinted ? 'Close' : 'Close Without Printing'}
                 </Button>
-                <Button onClick={handlePrint} variant={receiptPrinted ? 'outline' : 'default'}>
+                <Button
+                  onClick={handlePrint}
+                  variant={receiptPrinted ? 'outline' : 'default'}
+                  className="sm:order-2"
+                >
                   <Receipt className="mr-2 h-4 w-4" />
                   {receiptPrinted ? 'Print Again' : 'Print Receipt'}
                 </Button>
