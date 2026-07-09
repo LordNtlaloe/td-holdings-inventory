@@ -22,10 +22,17 @@ import { Jimp } from "jimp";
 const LOGO_URL =
   "https://res.cloudinary.com/ntlaloe-org/image/upload/w_384,f_png/v1782201264/TD_Holdings_mm9zfc.png";
 const LOGO_MAX_WIDTH = 240;
-const PRINTNODE_API_KEY = process.env.PRINTNODE_API_KEY as string;
 
-if (!PRINTNODE_API_KEY) {
-  console.warn("PRINTNODE_API_KEY is not set in Convex environment variables");
+// Set these in the Convex dashboard (or `npx convex env set`):
+//   RELAY_URL    = https://td-print-relay.fly.dev
+//   RELAY_SECRET = <the same secret the relay + till agents use>
+const RELAY_URL = (process.env.RELAY_URL || "").trim();
+const RELAY_SECRET = (process.env.RELAY_SECRET || "").trim();
+
+if (!RELAY_URL || !RELAY_SECRET) {
+  console.warn(
+    "RELAY_URL or RELAY_SECRET is not set in Convex environment variables — printing will fail until both are configured."
+  );
 }
 
 // ===============================
@@ -106,43 +113,46 @@ type SaleDiscount = {
 };
 
 // ===============================
-// PRINTNODE HELPER
+// RELAY HELPER
 // ===============================
 
-async function sendToPrintNode(
+/**
+ * Sends rendered ESC/POS bytes to a specific till via the Fly.io relay.
+ * The relay forwards this over WebSocket to the matching Electron agent,
+ * which writes it to the shared thermal printer.
+ *
+ * Throws on any non-2xx response so the caller's try/catch can report a
+ * clear error back to the POS UI (e.g. "till offline" vs "bad auth").
+ */
+async function sendToRelay(
   receiptBytes: Uint8Array,
-  printerId: number,
-  title: string
+  agentId: string,
+  paymentMethod: string
 ) {
-  if (!PRINTNODE_API_KEY) {
+  if (!RELAY_URL || !RELAY_SECRET) {
     throw new Error(
-      "PRINTNODE_API_KEY is not set in Convex environment variables"
+      "Print relay is not configured — RELAY_URL/RELAY_SECRET missing in Convex environment"
     );
   }
 
   const base64Data = Buffer.from(receiptBytes).toString("base64");
 
-  const response = await fetch("https://api.printnode.com/printjobs", {
+  const response = await fetch(`${RELAY_URL}/print/${agentId}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Basic ${Buffer.from(`${PRINTNODE_API_KEY}:`).toString(
-        "base64"
-      )}`,
+      Authorization: `Bearer ${RELAY_SECRET}`,
     },
     body: JSON.stringify({
-      printerId,
-      title,
-      contentType: "raw_base64",
-      content: base64Data,
-      source: "td-holdings-inventory",
+      receiptData: base64Data,
+      paymentMethod,
     }),
   });
 
   const responseText = await response.text();
 
   if (!response.ok) {
-    throw new Error(`PrintNode error (${response.status}): ${responseText}`);
+    throw new Error(`Relay error (${response.status}): ${responseText}`);
   }
 
   return responseText;
@@ -188,7 +198,7 @@ export const printReceipt = action({
     total: v.number(),
     itemCount: v.number(),
     completedAt: v.number(),
-    printerId: v.number(),
+    agentId: v.string(),
   },
 
   handler: async (ctx, args) => {
@@ -462,13 +472,9 @@ export const printReceipt = action({
     try {
       const data = await render(receipt);
 
-      await sendToPrintNode(
-        data,
-        args.printerId,
-        `Receipt ${args.saleId.slice(-8)} — ${args.storeName}`
-      );
+      await sendToRelay(data, args.agentId, args.paymentMethod);
 
-      return { success: true, message: "Receipt sent to printer" };
+      return { success: true, message: "Job sent to till" };
     } catch (error) {
       console.error("Print error:", error);
       return {

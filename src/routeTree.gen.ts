@@ -28,6 +28,7 @@ import { Route as DashboardCustomersIndexRouteImport } from './routes/dashboard/
 import { Route as DashboardCategoriesIndexRouteImport } from './routes/dashboard/categories/index'
 import { Route as DashboardSettingsPasswordRouteImport } from './routes/dashboard/settings/password'
 import { Route as DashboardSettingsAppearanceRouteImport } from './routes/dashboard/settings/appearance'
+import { Route as DashboardStoresSettingsIndexRouteImport } from './routes/dashboard/stores/settings/index'
 import { Route as DashboardProductsExportIndexRouteImport } from './routes/dashboard/products/export/index'
 
 const IndexRoute = IndexRouteImport.update({
@@ -129,6 +130,12 @@ const DashboardSettingsAppearanceRoute =
     path: '/dashboard/settings/appearance',
     getParentRoute: () => rootRouteImport,
   } as any)
+const DashboardStoresSettingsIndexRoute =
+  DashboardStoresSettingsIndexRouteImport.update({
+    id: '/dashboard/stores/settings/',
+    path: '/dashboard/stores/settings/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DashboardProductsExportIndexRoute =
   DashboardProductsExportIndexRouteImport.update({
     id: '/dashboard/products/export/',
@@ -157,6 +164,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/transfers/': typeof DashboardTransfersIndexRoute
   '/dashboard/users/': typeof DashboardUsersIndexRoute
   '/dashboard/products/export/': typeof DashboardProductsExportIndexRoute
+  '/dashboard/stores/settings/': typeof DashboardStoresSettingsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -179,6 +187,7 @@ export interface FileRoutesByTo {
   '/dashboard/transfers': typeof DashboardTransfersIndexRoute
   '/dashboard/users': typeof DashboardUsersIndexRoute
   '/dashboard/products/export': typeof DashboardProductsExportIndexRoute
+  '/dashboard/stores/settings': typeof DashboardStoresSettingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -202,6 +211,7 @@ export interface FileRoutesById {
   '/dashboard/transfers/': typeof DashboardTransfersIndexRoute
   '/dashboard/users/': typeof DashboardUsersIndexRoute
   '/dashboard/products/export/': typeof DashboardProductsExportIndexRoute
+  '/dashboard/stores/settings/': typeof DashboardStoresSettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -226,6 +236,7 @@ export interface FileRouteTypes {
     | '/dashboard/transfers/'
     | '/dashboard/users/'
     | '/dashboard/products/export/'
+    | '/dashboard/stores/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -248,6 +259,7 @@ export interface FileRouteTypes {
     | '/dashboard/transfers'
     | '/dashboard/users'
     | '/dashboard/products/export'
+    | '/dashboard/stores/settings'
   id:
     | '__root__'
     | '/'
@@ -270,6 +282,7 @@ export interface FileRouteTypes {
     | '/dashboard/transfers/'
     | '/dashboard/users/'
     | '/dashboard/products/export/'
+    | '/dashboard/stores/settings/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -293,6 +306,7 @@ export interface RootRouteChildren {
   DashboardTransfersIndexRoute: typeof DashboardTransfersIndexRoute
   DashboardUsersIndexRoute: typeof DashboardUsersIndexRoute
   DashboardProductsExportIndexRoute: typeof DashboardProductsExportIndexRoute
+  DashboardStoresSettingsIndexRoute: typeof DashboardStoresSettingsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -430,6 +444,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardSettingsAppearanceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/stores/settings/': {
+      id: '/dashboard/stores/settings/'
+      path: '/dashboard/stores/settings'
+      fullPath: '/dashboard/stores/settings/'
+      preLoaderRoute: typeof DashboardStoresSettingsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard/products/export/': {
       id: '/dashboard/products/export/'
       path: '/dashboard/products/export'
@@ -461,6 +482,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardTransfersIndexRoute: DashboardTransfersIndexRoute,
   DashboardUsersIndexRoute: DashboardUsersIndexRoute,
   DashboardProductsExportIndexRoute: DashboardProductsExportIndexRoute,
+  DashboardStoresSettingsIndexRoute: DashboardStoresSettingsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

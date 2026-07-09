@@ -36,6 +36,7 @@ export default defineSchema({
     xCoordinates: v.string(),
     yCoordinates: v.string(),
     isActive: v.boolean(),
+    printAgentId: v.optional(v.string()),
   }).index("by_type", ["type"]),
 
   departments: defineTable({
@@ -263,7 +264,6 @@ export default defineSchema({
     .index("by_cancelled_sale", ["cancelledSaleId"])
     .index("by_cancelled_by", ["cancelledBy"]),
 
-  // NEW: Sale edit history table
   saleEdits: defineTable({
     saleId: v.id("sales"),
     editedBy: v.id("users"),

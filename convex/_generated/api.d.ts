@@ -17,6 +17,7 @@ import type * as dashboard from "../dashboard.js";
 import type * as departments from "../departments.js";
 import type * as employees from "../employees.js";
 import type * as http from "../http.js";
+import type * as internal_stores from "../internal/stores.js";
 import type * as inventory from "../inventory.js";
 import type * as ledger from "../ledger.js";
 import type * as print from "../print.js";
@@ -48,6 +49,7 @@ declare const fullApi: ApiFromModules<{
   departments: typeof departments;
   employees: typeof employees;
   http: typeof http;
+  "internal/stores": typeof internal_stores;
   inventory: typeof inventory;
   ledger: typeof ledger;
   print: typeof print;

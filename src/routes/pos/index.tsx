@@ -13,6 +13,7 @@ import {
   Package,
   PlusCircle,
   X,
+  Printer,
 } from "lucide-react";
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
@@ -125,9 +126,6 @@ type CompletedSale = {
   changeDue?: number;
 };
 
-// XP-80C Printer ID from PrintNode
-const DEFAULT_PRINTER_ID = 75619302;
-
 function cartKey(
   productId: string,
   size?: string,
@@ -225,6 +223,11 @@ function RouteComponent() {
     api.inventory.getInventoryByStore,
     storeId ? { storeId: storeId as any } : "skip"
   ) as InventoryItem[] | undefined;
+  
+  const storePrintSettings = useQuery(
+    api.stores.getStorePrintSettings,
+    storeId ? { storeId: storeId as any } : "skip"
+  );
 
   const createSale = useMutation(api.sales.createSale);
   const findOrCreateCustomer = useMutation(api.customers.findOrCreateByName);
@@ -688,6 +691,26 @@ function RouteComponent() {
 
   const handlePrint = async () => {
     if (!completedSale) return;
+    
+    // Get the agent ID from store settings
+    const agentId = storePrintSettings?.printAgentId;
+    
+    if (!agentId) {
+      toast.error(
+        "No printer configured for this store. Please set up a printer in store settings.",
+        {
+          action: {
+            label: "Go to Settings",
+            onClick: () => {
+              // Navigate to store settings
+              window.location.href = "/admin/store-settings";
+            },
+          },
+        }
+      );
+      return;
+    }
+    
     try {
       const receiptItems = completedSale.items.map((item) => ({
         productId: item.productId,
@@ -718,7 +741,7 @@ function RouteComponent() {
         total: completedSale.total,
         itemCount: completedSale.itemCount,
         completedAt: completedSale.completedAt,
-        printerId: DEFAULT_PRINTER_ID,
+        agentId: agentId,
       });
 
       if (result.success) {
@@ -794,6 +817,9 @@ function RouteComponent() {
     }
   };
 
+  // Check if printer is configured
+  const isPrinterConfigured = !!storePrintSettings?.printAgentId;
+
   return (
     <POSLayout>
       <div className="grid grid-cols-1 gap-6 p-6 lg:grid-cols-[1fr_380px]">
@@ -806,6 +832,19 @@ function RouteComponent() {
                 ? "Select a store, add items to the cart, and check out"
                 : "Add items to the cart and check out"}
             </p>
+            {storeId && !isPrinterConfigured && (
+              <div className="mt-2 flex items-center gap-2 rounded-md bg-yellow-50 p-2 text-sm text-yellow-800 dark:bg-yellow-950 dark:text-yellow-200">
+                <Printer className="h-4 w-4" />
+                <span>No printer configured. </span>
+                <Button
+                  variant="link"
+                  className="h-auto p-0 text-yellow-800 dark:text-yellow-200"
+                  onClick={() => window.location.href = "/admin/store-settings"}
+                >
+                  Configure now
+                </Button>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row">
