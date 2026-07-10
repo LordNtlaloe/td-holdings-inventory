@@ -49,10 +49,11 @@ import {
     ArrowUp,
     ArrowDown,
     Ban,
+    CalendarRange,
 } from 'lucide-react'
 import type { Id } from '../../../convex/_generated/dataModel'
 import type { Sale } from '#/types/sales'
-import { formatCurrency, formatTimestamp, getStatusVariant } from './sales-utils'
+import { formatCurrency, formatTimestamp, getStatusVariant, startOfDay, endOfDay } from './sales-utils'
 
 interface SalesTableProps {
     sales: Sale[]
@@ -117,6 +118,8 @@ export function SalesTable({
     const [selectedDepartments, setSelectedDepartments] = useState<string[]>([])
     const [selectedPaymentMethods, setSelectedPaymentMethods] = useState<string[]>([])
     const [pageSize, setPageSize] = useState(10)
+    const [dateFrom, setDateFrom] = useState('')
+    const [dateTo, setDateTo] = useState('')
 
     const allDepartments = useMemo(() => {
         const set = new Set<string>()
@@ -129,6 +132,9 @@ export function SalesTable({
         sales.forEach(s => getSalePaymentMethods(s).forEach(m => set.add(m)))
         return [...set].sort()
     }, [sales])
+
+    const dateFromTs = useMemo(() => (dateFrom ? startOfDay(new Date(dateFrom)) : undefined), [dateFrom])
+    const dateToTs = useMemo(() => (dateTo ? endOfDay(new Date(dateTo)) : undefined), [dateTo])
 
     const filteredSales = useMemo(() => {
         let rows = sales
@@ -161,8 +167,16 @@ export function SalesTable({
             )
         }
 
+        if (dateFromTs !== undefined) {
+            rows = rows.filter(s => s.createdAt >= dateFromTs)
+        }
+
+        if (dateToTs !== undefined) {
+            rows = rows.filter(s => s.createdAt <= dateToTs)
+        }
+
         return rows
-    }, [sales, searchQuery, selectedDepartments, selectedPaymentMethods])
+    }, [sales, searchQuery, selectedDepartments, selectedPaymentMethods, dateFromTs, dateToTs])
 
     const showActionsCol = canAction || canVoid
 
@@ -381,13 +395,17 @@ export function SalesTable({
         !!searchQuery ||
         selectedDepartments.length > 0 ||
         selectedPaymentMethods.length > 0 ||
-        columnFilters.length > 0
+        columnFilters.length > 0 ||
+        !!dateFrom ||
+        !!dateTo
 
     const clearFilters = () => {
         setSearchQuery('')
         setSelectedDepartments([])
         setSelectedPaymentMethods([])
         setColumnFilters([])
+        setDateFrom('')
+        setDateTo('')
     }
 
     const { rows } = table.getRowModel()
@@ -511,6 +529,25 @@ export function SalesTable({
                         </DropdownMenuContent>
                     </DropdownMenu>
                 )}
+
+                <div className="flex items-center gap-1.5">
+                    <CalendarRange className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <Input
+                        type="date"
+                        value={dateFrom}
+                        onChange={e => setDateFrom(e.target.value)}
+                        className="h-9 w-36"
+                        aria-label="From date"
+                    />
+                    <span className="text-xs text-muted-foreground">to</span>
+                    <Input
+                        type="date"
+                        value={dateTo}
+                        onChange={e => setDateTo(e.target.value)}
+                        className="h-9 w-36"
+                        aria-label="To date"
+                    />
+                </div>
 
                 {hasActiveFilters && (
                     <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9">

@@ -1,15 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from 'convex/react'
 import { useState, useMemo } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
 
 import AppLayout from '#/layouts/app-layout'
 import { api } from '../../../../convex/_generated/api'
@@ -17,16 +8,16 @@ import type { Id } from '../../../../convex/_generated/dataModel'
 import {
   SalesStatCards,
   SalesFilters,
-  SalesTable,
   SaleDetailSheet,
   ConfirmActionDialog,
   SalesCharts,
+  ProductSalesBreakdownCard,
+  SalesHistoryCard,
   startOfDay,
   endOfDay,
   type SalesFiltersType,
 } from '#/components/sales'
 import { DistributionChart, type DistributionSlice } from '#/components/general/distribution-chart'
-import { formatCurrency } from '#/components/sales/sales-utils'
 
 export const Route = createFileRoute('/dashboard/sales/')({
   component: SalesPage,
@@ -148,25 +139,6 @@ function SalesPage() {
     return rows
   }, [salesRaw, filters])
 
-  // Today's revenue - ONLY COMPLETED SALES
-  const todayRevenue = useMemo(() => {
-    if (!salesRaw) return 0
-
-    // First filter by date range and store
-    let rows = (salesRaw as any[]).filter(
-      (s) => s.createdAt >= todayStart && s.createdAt <= todayEnd
-    )
-    if (filters.store !== 'all') {
-      rows = rows.filter((s) => s.storeId === filters.store)
-    }
-
-    // CRITICAL: Only include COMPLETED sales
-    // Exclude: voided, cancelled, refunded
-    const completedRows = rows.filter((s: any) => s.status === 'completed')
-
-    return completedRows.reduce((sum: number, s: any) => sum + s.totalAmount, 0)
-  }, [salesRaw, filters.store, todayStart, todayEnd])
-
   // Stats — all figures today-scoped; only completed sales count for revenue
   const stats = useMemo(() => {
     if (!salesRaw) {
@@ -207,7 +179,7 @@ function SalesPage() {
       avgOrderValue,
       refundCount,
       voidCount,
-      cancelledCount
+      cancelledCount,
     }
   }, [salesRaw, filteredSales, todayStart, todayEnd, filters.store])
 
@@ -220,25 +192,12 @@ function SalesPage() {
     }))
   }, [paymentMethodBreakdown])
 
-  // Get available departments from the API
   const availableDepartments = useMemo(() => {
     if (departments) {
       return departments.map((d) => d.name)
     }
     return []
   }, [departments])
-
-  const filteredTodayProductSales = useMemo(() => {
-    if (!todayProductSales) return []
-    return todayProductSales
-  }, [todayProductSales])
-
-  const todayTotals = useMemo(() => {
-    return {
-      qty: filteredTodayProductSales.reduce((sum: number, p: any) => sum + p.totalQuantity, 0),
-      revenue: filteredTodayProductSales.reduce((sum: number, p: any) => sum + p.totalRevenue, 0),
-    }
-  }, [filteredTodayProductSales])
 
   const hasActiveFilters = useMemo(() => {
     return (
@@ -270,24 +229,7 @@ function SalesPage() {
   }
 
   const isLoading = salesRaw === undefined || currentUser === undefined
-
-  const totalByMethod = useMemo(() => {
-    if (!paymentMethodBreakdown) return {}
-    return paymentMethodBreakdown.reduce(
-      (acc, item) => {
-        acc[item.method] = item.totalAmount
-        return acc
-      },
-      {} as Record<string, number>
-    )
-  }, [paymentMethodBreakdown])
-
   const isLoadingDepartments = departments === undefined
-
-  // History count - only completed sales
-  const historyTransactionCount = useMemo(() => {
-    return allSalesForHistory.filter((s: any) => s.status === 'completed').length
-  }, [allSalesForHistory])
 
   return (
     <AppLayout>
@@ -319,166 +261,32 @@ function SalesPage() {
           />
         </div>
 
-        {/* Product Sales Breakdown with department filtering - TODAY ONLY */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between gap-4">
-              <div className="space-y-0.5">
-                <CardTitle>Today's Product Sales</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  {new Date().toLocaleDateString('en-GB', {
-                    weekday: 'long',
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric',
-                  })}
-                  {filters.store !== 'all' && stores
-                    ? ` · ${stores.find((s: any) => s._id === filters.store)?.name ?? ''}`
-                    : ''}
-                  {breakdownDepartment !== 'all' && ` · ${breakdownDepartment}`}
-                </p>
-              </div>
+        <ProductSalesBreakdownCard
+          todayProductSales={todayProductSales}
+          availableDepartments={availableDepartments}
+          isLoadingDepartments={isLoadingDepartments}
+          breakdownDepartment={breakdownDepartment}
+          onBreakdownDepartmentChange={setBreakdownDepartment}
+          storeFilter={filters.store}
+          stores={stores}
+        />
 
-              <div className="flex items-center gap-2">
-                {!isLoadingDepartments && availableDepartments.length > 0 && (
-                  <Select value={breakdownDepartment} onValueChange={setBreakdownDepartment}>
-                    <SelectTrigger className="w-44 shrink-0">
-                      <SelectValue placeholder="All departments" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All departments</SelectItem>
-                      {availableDepartments.map((dept) => (
-                        <SelectItem key={dept} value={dept}>
-                          {dept}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-            </div>
-          </CardHeader>
-
-          <CardContent>
-            {todayProductSales === undefined ? (
-              <div className="flex justify-center py-8">
-                <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-              </div>
-            ) : filteredTodayProductSales.length === 0 ? (
-              <p className="py-8 text-center text-muted-foreground">
-                No sales recorded today
-                {breakdownDepartment !== 'all' ? ` in ${breakdownDepartment}` : ''}
-              </p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-left">
-                      <th className="pb-2 font-medium">Product</th>
-                      <th className="pb-2 font-medium text-right">SKU</th>
-                      {availableDepartments.length > 0 && breakdownDepartment === 'all' && (
-                        <th className="pb-2 font-medium text-right">Department</th>
-                      )}
-                      <th className="pb-2 font-medium text-right">Qty</th>
-                      <th className="pb-2 font-medium text-right">Revenue</th>
-                      <th className="pb-2 font-medium text-right">Payment Methods</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredTodayProductSales.map((product: any) => (
-                      <tr key={product.productId} className="border-b last:border-0">
-                        <td className="py-2 font-medium">{product.productName}</td>
-                        <td className="py-2 text-right font-mono text-xs text-muted-foreground">
-                          {product.sku}
-                        </td>
-                        {availableDepartments.length > 0 && breakdownDepartment === 'all' && (
-                          <td className="py-2 text-right">
-                            {product.department ? (
-                              <Badge variant="secondary" className="text-xs">
-                                {product.department}
-                              </Badge>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </td>
-                        )}
-                        <td className="py-2 text-right">{product.totalQuantity}</td>
-                        <td className="py-2 text-right font-medium">
-                          {formatCurrency(product.totalRevenue)}
-                        </td>
-                        <td className="py-2 text-right">
-                          <div className="space-y-0.5">
-                            {product.paymentMethods.map((pm: any) => (
-                              <div key={pm.method} className="flex justify-end gap-2 text-xs">
-                                <span className="text-muted-foreground">{pm.method}:</span>
-                                <span>{formatCurrency(pm.amount)}</span>
-                                <span className="text-muted-foreground">
-                                  ({Math.round(pm.quantity)} units)
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t bg-muted/30 font-medium">
-                      <td className="py-2 pl-1">
-                        Total
-                        {breakdownDepartment !== 'all' && (
-                          <span className="ml-1 text-xs font-normal text-muted-foreground">
-                            ({breakdownDepartment})
-                          </span>
-                        )}
-                      </td>
-                      <td />
-                      {availableDepartments.length > 0 && breakdownDepartment === 'all' && <td />}
-                      <td className="py-2 text-right">{todayTotals.qty}</td>
-                      <td className="py-2 text-right">{formatCurrency(todayTotals.revenue)}</td>
-                      <td className="py-2 text-right">
-                        {Object.entries(totalByMethod).map(([method, amount]) => (
-                          <div key={method} className="text-xs">
-                            {method}: {formatCurrency(amount as number)}
-                          </div>
-                        ))}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Full sales history - ALL SALES, no date restrictions */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Sales History</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              {historyTransactionCount} completed transaction{historyTransactionCount !== 1 ? 's' : ''}
-              {filters.status !== 'all' && ` · filtered by ${filters.status}`}
-              {filters.store !== 'all' && stores
-                ? ` · ${stores.find((s: any) => s._id === filters.store)?.name ?? ''}`
-                : ''}
-            </p>
-          </CardHeader>
-          <CardContent>
-            <SalesTable
-              sales={allSalesForHistory}
-              isLoading={isLoading}
-              isGlobal={isGlobal}
-              canAction={canAction}
-              canVoid={canVoid}
-              onSelectSale={setSelectedSaleId}
-              onVoid={openVoid}
-              onCancel={openCancel}
-              onRefund={function (_: Id<'sales'>): void {
-                throw new Error('Function not implemented.')
-              }}
-            />
-          </CardContent>
-        </Card>
+        <SalesHistoryCard
+          sales={allSalesForHistory}
+          isLoading={isLoading}
+          isGlobal={isGlobal}
+          canAction={canAction}
+          canVoid={canVoid}
+          statusFilter={filters.status}
+          storeFilter={filters.store}
+          stores={stores}
+          onSelectSale={setSelectedSaleId}
+          onVoid={openVoid}
+          onCancel={openCancel}
+          onRefund={(_: Id<'sales'>) => {
+            throw new Error('Function not implemented.')
+          }}
+        />
       </div>
 
       <SaleDetailSheet
