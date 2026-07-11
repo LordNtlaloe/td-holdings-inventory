@@ -29,9 +29,6 @@ export function formatCurrency(amount: number) {
     return `R${amount.toFixed(2)}`;
 }
 
-const TYRE_DISCOUNT_THRESHOLD = 4;
-const TYRE_DISCOUNT_AMOUNT = 200;
-
 export function extractRimSize(sizeStr: string): number | null {
     const m =
         sizeStr.match(/[Rr](\d+)$/) ||
@@ -40,57 +37,22 @@ export function extractRimSize(sizeStr: string): number | null {
     return m ? parseInt(m[1], 10) : null;
 }
 
+/**
+ * Total discount across the cart. Discounts are entirely manual —
+ * set by whoever is manning the POS via each line's `manualDiscount`.
+ * No automatic/bulk discount rules are applied here.
+ */
 export function computeFrontendDiscounts(cart: CartLine[]): number {
-    const productQty: Record<string, number> = {};
-    for (const line of cart) {
-        if (!line.departmentName.toLowerCase().includes("tyre")) continue;
-        if (!line.size) continue;
-        const rim = extractRimSize(line.size);
-        if (rim === null || rim < 14) continue;
-        productQty[line.productId] = (productQty[line.productId] || 0) + line.quantity;
-    }
-
-    let autoDiscountTotal = 0;
-    for (const qty of Object.values(productQty)) {
-        if (qty >= TYRE_DISCOUNT_THRESHOLD) autoDiscountTotal += TYRE_DISCOUNT_AMOUNT;
-    }
-
-    const manualDiscountTotal = cart.reduce(
-        (sum, l) => sum + (l.manualDiscount || 0),
-        0
-    );
-    return autoDiscountTotal + manualDiscountTotal;
+    return cart.reduce((sum, l) => sum + (l.manualDiscount || 0), 0);
 }
 
 /**
  * Builds the receipt-facing discount breakdown (per product, with reasons)
- * used when finalizing a sale. Mirrors computeFrontendDiscounts but returns
- * line-item detail instead of just a total.
+ * used when finalizing a sale. Reflects only manual discounts entered by
+ * the cashier — no automatic rules are applied.
  */
 export function buildReceiptDiscounts(cart: CartLine[]) {
     const discounts: { productId: string; discountAmount: number; reason?: string }[] = [];
-
-    const productQty: Record<string, { qty: number; departmentName: string }> = {};
-    for (const line of cart) {
-        if (!line.departmentName.toLowerCase().includes("tyre")) continue;
-        if (!line.size) continue;
-        const rim = extractRimSize(line.size);
-        if (rim === null || rim < 14) continue;
-        if (!productQty[line.productId]) {
-            productQty[line.productId] = { qty: 0, departmentName: line.departmentName };
-        }
-        productQty[line.productId].qty += line.quantity;
-    }
-
-    for (const [productId, { qty }] of Object.entries(productQty)) {
-        if (qty >= TYRE_DISCOUNT_THRESHOLD) {
-            discounts.push({
-                productId,
-                discountAmount: TYRE_DISCOUNT_AMOUNT,
-                reason: `Tyre bulk discount (${qty}x, size 14+)`,
-            });
-        }
-    }
 
     for (const line of cart) {
         if (line.manualDiscount && line.manualDiscount > 0) {
