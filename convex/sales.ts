@@ -845,7 +845,7 @@ export const cancelSale = mutation({
         reason: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const currentUser = await requireRole(ctx, ["super_admin", "admin", "manager"]);
+        const currentUser = await requireRole(ctx, ["super_admin", "admin", "manager", "cashier"]);
 
         const originalSale = await ctx.db.get(args.saleId);
         if (!originalSale) throw new Error("Sale not found");
@@ -1043,7 +1043,7 @@ export const refundSale = mutation({
 export const voidSale = mutation({
     args: { saleId: v.id("sales") },
     handler: async (ctx, args) => {
-        const currentUser = await requireRole(ctx, ["super_admin", "admin", "manager"]);
+        const currentUser = await requireRole(ctx, ["super_admin", "admin", "manager", "cashier"]);
 
         const sale = await ctx.db.get(args.saleId);
         if (!sale) throw new Error("Sale not found");
