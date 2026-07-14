@@ -296,7 +296,7 @@ function SalesPage() {
         canAction={canAction}
         onVoid={openVoid}
         onCancel={openCancel}
-        canVoid={false}
+        canVoid={canVoid}
       />
 
       <ConfirmActionDialog
