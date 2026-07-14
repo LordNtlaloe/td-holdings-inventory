@@ -730,18 +730,13 @@ export const createSale = mutation({
             grossTotal += item.quantity * item.unitPrice;
         }
 
-        const tyreDiscountMap = computeTyreDiscounts(args.items);
-        const tyreDiscountTotal = Object.values(tyreDiscountMap).reduce(
-            (sum, d) => sum + d.discountAmount,
-            0
-        );
-
+        // Automatic tyre bulk discount removed — discounting is now manual-only (frontend-driven)
         const manualDiscountTotal = args.items.reduce(
             (sum, item) => sum + (item.manualDiscount ?? 0),
             0
         );
 
-        const discountTotal = tyreDiscountTotal + manualDiscountTotal;
+        const discountTotal = manualDiscountTotal;
         const totalAmount = Math.max(0, grossTotal - discountTotal);
 
         const paymentTotal = args.payments.reduce((sum, p) => sum + p.amount, 0);
@@ -782,15 +777,6 @@ export const createSale = mutation({
             changeDue: cashLegs.length > 0 && totalChangeDue > 0 ? totalChangeDue : undefined,
             createdAt: Date.now(),
         });
-
-        for (const [productId, disc] of Object.entries(tyreDiscountMap)) {
-            await ctx.db.insert("saleDiscounts", {
-                saleId,
-                productId: productId as Id<"products">,
-                discountAmount: disc.discountAmount,
-                reason: disc.reason,
-            });
-        }
 
         for (const item of args.items) {
             if (item.manualDiscount && item.manualDiscount > 0) {

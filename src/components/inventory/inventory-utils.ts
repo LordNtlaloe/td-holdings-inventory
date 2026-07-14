@@ -65,7 +65,10 @@ export function getProductSku(product?: Product | null): string {
 }
 
 export function formatCurrency(amount: number): string {
-    return `R${amount.toFixed(2)}`
+    return `R${amount.toLocaleString('en-ZA', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })}`
 }
 
 export function getStockStatus(
