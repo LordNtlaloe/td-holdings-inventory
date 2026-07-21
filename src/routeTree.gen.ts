@@ -21,6 +21,7 @@ import { Route as DashboardSettingsIndexRouteImport } from './routes/dashboard/s
 import { Route as DashboardSalesIndexRouteImport } from './routes/dashboard/sales/index'
 import { Route as DashboardReportsIndexRouteImport } from './routes/dashboard/reports/index'
 import { Route as DashboardProductsIndexRouteImport } from './routes/dashboard/products/index'
+import { Route as DashboardInvoiceIndexRouteImport } from './routes/dashboard/invoice/index'
 import { Route as DashboardInventoryIndexRouteImport } from './routes/dashboard/inventory/index'
 import { Route as DashboardEmployeesIndexRouteImport } from './routes/dashboard/employees/index'
 import { Route as DashboardDepartmentsIndexRouteImport } from './routes/dashboard/departments/index'
@@ -30,6 +31,8 @@ import { Route as DashboardSettingsPasswordRouteImport } from './routes/dashboar
 import { Route as DashboardSettingsAppearanceRouteImport } from './routes/dashboard/settings/appearance'
 import { Route as DashboardStoresSettingsIndexRouteImport } from './routes/dashboard/stores/settings/index'
 import { Route as DashboardProductsExportIndexRouteImport } from './routes/dashboard/products/export/index'
+import { Route as DashboardInvoiceNewIndexRouteImport } from './routes/dashboard/invoice/new/index'
+import { Route as DashboardInvoiceIdIndexRouteImport } from './routes/dashboard/invoice/$id/index'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -91,6 +94,11 @@ const DashboardProductsIndexRoute = DashboardProductsIndexRouteImport.update({
   path: '/dashboard/products/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardInvoiceIndexRoute = DashboardInvoiceIndexRouteImport.update({
+  id: '/dashboard/invoice/',
+  path: '/dashboard/invoice/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardInventoryIndexRoute = DashboardInventoryIndexRouteImport.update({
   id: '/dashboard/inventory/',
   path: '/dashboard/inventory/',
@@ -142,6 +150,17 @@ const DashboardProductsExportIndexRoute =
     path: '/dashboard/products/export/',
     getParentRoute: () => rootRouteImport,
   } as any)
+const DashboardInvoiceNewIndexRoute =
+  DashboardInvoiceNewIndexRouteImport.update({
+    id: '/dashboard/invoice/new/',
+    path: '/dashboard/invoice/new/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const DashboardInvoiceIdIndexRoute = DashboardInvoiceIdIndexRouteImport.update({
+  id: '/dashboard/invoice/$id/',
+  path: '/dashboard/invoice/$id/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -156,6 +175,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/departments/': typeof DashboardDepartmentsIndexRoute
   '/dashboard/employees/': typeof DashboardEmployeesIndexRoute
   '/dashboard/inventory/': typeof DashboardInventoryIndexRoute
+  '/dashboard/invoice/': typeof DashboardInvoiceIndexRoute
   '/dashboard/products/': typeof DashboardProductsIndexRoute
   '/dashboard/reports/': typeof DashboardReportsIndexRoute
   '/dashboard/sales/': typeof DashboardSalesIndexRoute
@@ -163,6 +183,8 @@ export interface FileRoutesByFullPath {
   '/dashboard/stores/': typeof DashboardStoresIndexRoute
   '/dashboard/transfers/': typeof DashboardTransfersIndexRoute
   '/dashboard/users/': typeof DashboardUsersIndexRoute
+  '/dashboard/invoice/$id/': typeof DashboardInvoiceIdIndexRoute
+  '/dashboard/invoice/new/': typeof DashboardInvoiceNewIndexRoute
   '/dashboard/products/export/': typeof DashboardProductsExportIndexRoute
   '/dashboard/stores/settings/': typeof DashboardStoresSettingsIndexRoute
 }
@@ -179,6 +201,7 @@ export interface FileRoutesByTo {
   '/dashboard/departments': typeof DashboardDepartmentsIndexRoute
   '/dashboard/employees': typeof DashboardEmployeesIndexRoute
   '/dashboard/inventory': typeof DashboardInventoryIndexRoute
+  '/dashboard/invoice': typeof DashboardInvoiceIndexRoute
   '/dashboard/products': typeof DashboardProductsIndexRoute
   '/dashboard/reports': typeof DashboardReportsIndexRoute
   '/dashboard/sales': typeof DashboardSalesIndexRoute
@@ -186,6 +209,8 @@ export interface FileRoutesByTo {
   '/dashboard/stores': typeof DashboardStoresIndexRoute
   '/dashboard/transfers': typeof DashboardTransfersIndexRoute
   '/dashboard/users': typeof DashboardUsersIndexRoute
+  '/dashboard/invoice/$id': typeof DashboardInvoiceIdIndexRoute
+  '/dashboard/invoice/new': typeof DashboardInvoiceNewIndexRoute
   '/dashboard/products/export': typeof DashboardProductsExportIndexRoute
   '/dashboard/stores/settings': typeof DashboardStoresSettingsIndexRoute
 }
@@ -203,6 +228,7 @@ export interface FileRoutesById {
   '/dashboard/departments/': typeof DashboardDepartmentsIndexRoute
   '/dashboard/employees/': typeof DashboardEmployeesIndexRoute
   '/dashboard/inventory/': typeof DashboardInventoryIndexRoute
+  '/dashboard/invoice/': typeof DashboardInvoiceIndexRoute
   '/dashboard/products/': typeof DashboardProductsIndexRoute
   '/dashboard/reports/': typeof DashboardReportsIndexRoute
   '/dashboard/sales/': typeof DashboardSalesIndexRoute
@@ -210,6 +236,8 @@ export interface FileRoutesById {
   '/dashboard/stores/': typeof DashboardStoresIndexRoute
   '/dashboard/transfers/': typeof DashboardTransfersIndexRoute
   '/dashboard/users/': typeof DashboardUsersIndexRoute
+  '/dashboard/invoice/$id/': typeof DashboardInvoiceIdIndexRoute
+  '/dashboard/invoice/new/': typeof DashboardInvoiceNewIndexRoute
   '/dashboard/products/export/': typeof DashboardProductsExportIndexRoute
   '/dashboard/stores/settings/': typeof DashboardStoresSettingsIndexRoute
 }
@@ -228,6 +256,7 @@ export interface FileRouteTypes {
     | '/dashboard/departments/'
     | '/dashboard/employees/'
     | '/dashboard/inventory/'
+    | '/dashboard/invoice/'
     | '/dashboard/products/'
     | '/dashboard/reports/'
     | '/dashboard/sales/'
@@ -235,6 +264,8 @@ export interface FileRouteTypes {
     | '/dashboard/stores/'
     | '/dashboard/transfers/'
     | '/dashboard/users/'
+    | '/dashboard/invoice/$id/'
+    | '/dashboard/invoice/new/'
     | '/dashboard/products/export/'
     | '/dashboard/stores/settings/'
   fileRoutesByTo: FileRoutesByTo
@@ -251,6 +282,7 @@ export interface FileRouteTypes {
     | '/dashboard/departments'
     | '/dashboard/employees'
     | '/dashboard/inventory'
+    | '/dashboard/invoice'
     | '/dashboard/products'
     | '/dashboard/reports'
     | '/dashboard/sales'
@@ -258,6 +290,8 @@ export interface FileRouteTypes {
     | '/dashboard/stores'
     | '/dashboard/transfers'
     | '/dashboard/users'
+    | '/dashboard/invoice/$id'
+    | '/dashboard/invoice/new'
     | '/dashboard/products/export'
     | '/dashboard/stores/settings'
   id:
@@ -274,6 +308,7 @@ export interface FileRouteTypes {
     | '/dashboard/departments/'
     | '/dashboard/employees/'
     | '/dashboard/inventory/'
+    | '/dashboard/invoice/'
     | '/dashboard/products/'
     | '/dashboard/reports/'
     | '/dashboard/sales/'
@@ -281,6 +316,8 @@ export interface FileRouteTypes {
     | '/dashboard/stores/'
     | '/dashboard/transfers/'
     | '/dashboard/users/'
+    | '/dashboard/invoice/$id/'
+    | '/dashboard/invoice/new/'
     | '/dashboard/products/export/'
     | '/dashboard/stores/settings/'
   fileRoutesById: FileRoutesById
@@ -298,6 +335,7 @@ export interface RootRouteChildren {
   DashboardDepartmentsIndexRoute: typeof DashboardDepartmentsIndexRoute
   DashboardEmployeesIndexRoute: typeof DashboardEmployeesIndexRoute
   DashboardInventoryIndexRoute: typeof DashboardInventoryIndexRoute
+  DashboardInvoiceIndexRoute: typeof DashboardInvoiceIndexRoute
   DashboardProductsIndexRoute: typeof DashboardProductsIndexRoute
   DashboardReportsIndexRoute: typeof DashboardReportsIndexRoute
   DashboardSalesIndexRoute: typeof DashboardSalesIndexRoute
@@ -305,6 +343,8 @@ export interface RootRouteChildren {
   DashboardStoresIndexRoute: typeof DashboardStoresIndexRoute
   DashboardTransfersIndexRoute: typeof DashboardTransfersIndexRoute
   DashboardUsersIndexRoute: typeof DashboardUsersIndexRoute
+  DashboardInvoiceIdIndexRoute: typeof DashboardInvoiceIdIndexRoute
+  DashboardInvoiceNewIndexRoute: typeof DashboardInvoiceNewIndexRoute
   DashboardProductsExportIndexRoute: typeof DashboardProductsExportIndexRoute
   DashboardStoresSettingsIndexRoute: typeof DashboardStoresSettingsIndexRoute
 }
@@ -395,6 +435,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardProductsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/invoice/': {
+      id: '/dashboard/invoice/'
+      path: '/dashboard/invoice'
+      fullPath: '/dashboard/invoice/'
+      preLoaderRoute: typeof DashboardInvoiceIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard/inventory/': {
       id: '/dashboard/inventory/'
       path: '/dashboard/inventory'
@@ -458,6 +505,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardProductsExportIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/invoice/new/': {
+      id: '/dashboard/invoice/new/'
+      path: '/dashboard/invoice/new'
+      fullPath: '/dashboard/invoice/new/'
+      preLoaderRoute: typeof DashboardInvoiceNewIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard/invoice/$id/': {
+      id: '/dashboard/invoice/$id/'
+      path: '/dashboard/invoice/$id'
+      fullPath: '/dashboard/invoice/$id/'
+      preLoaderRoute: typeof DashboardInvoiceIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -474,6 +535,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardDepartmentsIndexRoute: DashboardDepartmentsIndexRoute,
   DashboardEmployeesIndexRoute: DashboardEmployeesIndexRoute,
   DashboardInventoryIndexRoute: DashboardInventoryIndexRoute,
+  DashboardInvoiceIndexRoute: DashboardInvoiceIndexRoute,
   DashboardProductsIndexRoute: DashboardProductsIndexRoute,
   DashboardReportsIndexRoute: DashboardReportsIndexRoute,
   DashboardSalesIndexRoute: DashboardSalesIndexRoute,
@@ -481,6 +543,8 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardStoresIndexRoute: DashboardStoresIndexRoute,
   DashboardTransfersIndexRoute: DashboardTransfersIndexRoute,
   DashboardUsersIndexRoute: DashboardUsersIndexRoute,
+  DashboardInvoiceIdIndexRoute: DashboardInvoiceIdIndexRoute,
+  DashboardInvoiceNewIndexRoute: DashboardInvoiceNewIndexRoute,
   DashboardProductsExportIndexRoute: DashboardProductsExportIndexRoute,
   DashboardStoresSettingsIndexRoute: DashboardStoresSettingsIndexRoute,
 }

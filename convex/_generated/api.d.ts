@@ -19,6 +19,7 @@ import type * as employees from "../employees.js";
 import type * as http from "../http.js";
 import type * as internal_stores from "../internal/stores.js";
 import type * as inventory from "../inventory.js";
+import type * as invoice from "../invoice.js";
 import type * as ledger from "../ledger.js";
 import type * as print from "../print.js";
 import type * as products from "../products.js";
@@ -51,6 +52,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   "internal/stores": typeof internal_stores;
   inventory: typeof inventory;
+  invoice: typeof invoice;
   ledger: typeof ledger;
   print: typeof print;
   products: typeof products;

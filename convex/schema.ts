@@ -298,4 +298,42 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_action", ["action"])
     .index("by_created", ["createdAt"]),
+
+    invoices: defineTable({
+    storeId: v.id("stores"),
+    docType: v.union(
+      v.literal("quotation"),
+      v.literal("proforma"),
+      v.literal("invoice")
+    ),
+    invoiceNumber: v.string(), // e.g. "QUO-0001", "PRO-0001", "INV-0001"
+    customerId: v.optional(v.id("customers")),
+    customerName: v.optional(v.string()),
+    customerPhone: v.optional(v.string()),
+    status: v.union(v.literal("unpaid"), v.literal("paid"), v.literal("cancelled")),
+    totalAmount: v.number(),
+    discountTotal: v.optional(v.number()),
+    validUntil: v.optional(v.number()), // relevant for quotations/proforma, expiry date
+    notes: v.optional(v.string()),
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+    paidAt: v.optional(v.number()),
+    convertedFromId: v.optional(v.id("invoices")), // e.g. quotation → proforma → invoice chain
+    convertedToSaleId: v.optional(v.id("sales")),
+  })
+    .index("by_store", ["storeId"])
+    .index("by_doc_type", ["docType"])
+    .index("by_status", ["status"])
+    .index("by_customer", ["customerId"])
+    .index("by_invoice_number", ["invoiceNumber"]),
+
+  invoiceItems: defineTable({
+    invoiceId: v.id("invoices"),
+    productId: v.id("products"),
+    quantity: v.number(),
+    unitPrice: v.number(),
+    size: v.optional(v.string()),
+    color: v.optional(v.string()),
+    variant: v.optional(v.string()),
+  }).index("by_invoice", ["invoiceId"]),
 });
