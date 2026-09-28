@@ -5326,13 +5326,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"convex@npm:^1.41.0":
-  version: 1.41.0
-  resolution: "convex@npm:1.41.0"
+"convex@npm:^1.46.0":
+  version: 1.46.0
+  resolution: "convex@npm:1.46.0"
   dependencies:
     esbuild: "npm:0.27.0"
     prettier: "npm:^3.0.0"
-    ws: "npm:8.20.1"
+    ws: "npm:8.21.0"
   peerDependencies:
     "@auth0/auth0-react": ^2.0.1
     "@clerk/clerk-react": ^4.12.8 || ^5.0.0
@@ -5349,7 +5349,7 @@ __metadata:
       optional: true
   bin:
     convex: bin/main.js
-  checksum: 10c0/d37df4f873dd4242bb1c0cfbee5f165a1858342f1989c01fc8b5fedf01ba6632239b8310a31a0a28e63d817705524958d2315eea6445c20433a7f6ffe1a33283
+  checksum: 10c0/68d63f2853e82ba8f383419b7fc88f3841a92073b8879553dd28c16e868155b54078148a125f871ed89651a04d0ef56233ed1c3b7c1d538c47a2a8d2ed3fed2e
   languageName: node
   linkType: hard
 
@@ -9796,7 +9796,7 @@ __metadata:
     "@vitejs/plugin-react": "npm:^6.0.1"
     class-variance-authority: "npm:^0.7.1"
     clsx: "npm:^2.1.1"
-    convex: "npm:^1.41.0"
+    convex: "npm:^1.46.0"
     date-fns: "npm:^4.4.0"
     jimp: "npm:^1.6.1"
     jsdom: "npm:^28.1.0"
@@ -10611,22 +10611,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ws@npm:8.20.1":
-  version: 8.20.1
-  resolution: "ws@npm:8.20.1"
-  peerDependencies:
-    bufferutil: ^4.0.1
-    utf-8-validate: ">=5.0.2"
-  peerDependenciesMeta:
-    bufferutil:
-      optional: true
-    utf-8-validate:
-      optional: true
-  checksum: 10c0/ce162433218399cdedeb76fd33363d4d86a7d910058d4e3c679dce08cea65d6da6b39f11baa4d7808d024cf46ed88f6a05c17611621aaad8fc5e62edacc30c5d
-  languageName: node
-  linkType: hard
-
-"ws@npm:^8.18.3":
+"ws@npm:8.21.0, ws@npm:^8.18.3":
   version: 8.21.0
   resolution: "ws@npm:8.21.0"
   peerDependencies:

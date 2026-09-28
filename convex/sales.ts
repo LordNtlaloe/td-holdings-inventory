@@ -1309,3 +1309,122 @@ export const getCompletedSalesByStore = query({
     return withDetails.sort((a, b) => b.createdAt - a.createdAt);
   },
 });
+
+export const getProductSalesOverView = query({
+  args: {
+    productId: v.id("products"),
+    storeId: v.optional(v.id("stores")),
+  },
+  handler: async (ctx, args) => {
+    await requireRole(ctx, ["super_admin", "admin", "manager", "cashier"]);
+
+    // Get all completed sales
+    let sales: any[];
+    if (args.storeId) {
+      sales = await ctx.db
+        .query("sales")
+        .withIndex("by_store", (q) => q.eq("storeId", args.storeId!))
+        .collect();
+    } else {
+      sales = await ctx.db.query("sales").collect();
+    }
+
+    sales = sales.filter((s) => s.status === "completed");
+
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayTs = todayStart.getTime();
+    const monthAgo = now - 30 * dayMs;
+    const weekAgo = now - 7 * dayMs;
+
+    // Filter sales for each period
+    const monthSales = sales.filter((s) => s.createdAt >= monthAgo);
+    const weekSales = sales.filter((s) => s.createdAt >= weekAgo);
+    const todaySales = sales.filter((s) => s.createdAt >= todayTs);
+
+    const product = await ctx.db.get(args.productId);
+    const department = product?.departmentId
+      ? await ctx.db.get(product.departmentId)
+      : null;
+
+    // Helper: compute stats AND collect transaction records for a set of sales
+    async function computePeriod(salesBatch: any[]) {
+      let totalQuantity = 0;
+      let totalRevenue = 0;
+      let saleCount = 0;
+      const transactions: Array<{
+        saleId: string;
+        createdAt: number;
+        quantity: number;
+        unitPrice: number;
+        totalItemPrice: number;
+        customerName: string;
+        storeName: string;
+      }> = [];
+
+      for (const sale of salesBatch) {
+        const items = await ctx.db
+          .query("saleItems")
+          .withIndex("by_sale", (q) => q.eq("saleId", sale._id))
+          .collect();
+
+        let hasProduct = false;
+        let itemQuantity = 0;
+        let itemRevenue = 0;
+
+        for (const item of items) {
+          if (item.productId === args.productId) {
+            itemQuantity += item.quantity;
+            itemRevenue += item.quantity * item.unitPrice;
+            hasProduct = true;
+          }
+        }
+
+        if (hasProduct) {
+          totalQuantity += itemQuantity;
+          totalRevenue += itemRevenue;
+          saleCount++;
+
+          // Resolve store and customer names
+          const storeDoc = sale.storeId ? await ctx.db.get(sale.storeId) : null;
+          const customerDoc = sale.customerId ? await ctx.db.get(sale.customerId) : null;
+
+          transactions.push({
+            saleId: sale._id,
+            createdAt: sale.createdAt,
+            quantity: itemQuantity,
+            unitPrice: itemRevenue / itemQuantity,
+            totalItemPrice: itemRevenue,
+            customerName: (customerDoc as any)?.name ?? "Walk-in",
+            storeName: (storeDoc as any)?.name ?? "Unknown",
+          });
+        }
+      }
+
+      // Sort transactions newest first
+      transactions.sort((a, b) => b.createdAt - a.createdAt);
+
+      return { totalQuantity, totalRevenue, saleCount, transactions };
+    }
+
+    const periods = {
+      allTime: await computePeriod(sales),
+      pastMonth: await computePeriod(monthSales),
+      pastWeek: await computePeriod(weekSales),
+      today: await computePeriod(todaySales),
+    };
+
+    return {
+      productId: args.productId,
+      productName: product?.name ?? "Unknown Product",
+      sku: product?.sku ?? "",
+      department: department?.name ?? "",
+      sellingPrice: product?.sellingPrice ?? 0,
+      costPrice: product?.costPrice ?? 0,
+      periods,
+    };
+  },
+});

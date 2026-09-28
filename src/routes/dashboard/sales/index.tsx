@@ -13,11 +13,13 @@ import {
   SalesCharts,
   ProductSalesBreakdownCard,
   SalesHistoryCard,
+  SalesByProduct,
   startOfDay,
   endOfDay,
   type SalesFiltersType,
 } from '#/components/sales'
 import { DistributionChart, type DistributionSlice } from '#/components/general/distribution-chart'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 export const Route = createFileRoute('/dashboard/sales/')({
   component: SalesPage,
@@ -34,6 +36,7 @@ const PAYMENT_METHOD_COLORS: Record<string, string> = {
 }
 
 function SalesPage() {
+  const [activeTab, setActiveTab] = useState('overview')
   const [filters, setFilters] = useState<SalesFiltersType>({
     status: 'all',
     store: 'all',
@@ -241,52 +244,120 @@ function SalesPage() {
           </p>
         </div>
 
-        <SalesStatCards stats={stats} isLoading={isLoading} />
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="by-store">By Store</TabsTrigger>
+            <TabsTrigger value="by-department">By Department</TabsTrigger>
+            <TabsTrigger value="by-product">By Product</TabsTrigger>
+          </TabsList>
 
-        <SalesFilters
-          filters={filters}
-          onFilterChange={handleFilterChange}
-          onClearFilters={handleClearFilters}
-          isGlobal={isGlobal}
-          stores={stores}
-          hasActiveFilters={hasActiveFilters}
-        />
+          <TabsContent value="overview" className="space-y-6 pt-4">
+            <SalesStatCards stats={stats} isLoading={isLoading} />
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <SalesCharts salesData={filteredSales} isLoading={isLoading} isGlobal={isGlobal} />
-          <DistributionChart
-            data={paymentMethodData}
-            title="Revenue by Payment Method"
-            description="Total revenue breakdown by how customers paid"
-          />
-        </div>
+            <SalesFilters
+              filters={filters}
+              onFilterChange={handleFilterChange}
+              onClearFilters={handleClearFilters}
+              isGlobal={isGlobal}
+              stores={stores}
+              hasActiveFilters={hasActiveFilters}
+            />
 
-        <ProductSalesBreakdownCard
-          todayProductSales={todayProductSales}
-          availableDepartments={availableDepartments}
-          isLoadingDepartments={isLoadingDepartments}
-          breakdownDepartment={breakdownDepartment}
-          onBreakdownDepartmentChange={setBreakdownDepartment}
-          storeFilter={filters.store}
-          stores={stores}
-        />
+            <div className="grid gap-4 md:grid-cols-2">
+              <SalesCharts salesData={filteredSales} isLoading={isLoading} isGlobal={isGlobal} />
+              <DistributionChart
+                data={paymentMethodData}
+                title="Revenue by Payment Method"
+                description="Total revenue breakdown by how customers paid"
+              />
+            </div>
 
-        <SalesHistoryCard
-          sales={allSalesForHistory}
-          isLoading={isLoading}
-          isGlobal={isGlobal}
-          canAction={canAction}
-          canVoid={canVoid}
-          statusFilter={filters.status}
-          storeFilter={filters.store}
-          stores={stores}
-          onSelectSale={setSelectedSaleId}
-          onVoid={openVoid}
-          onCancel={openCancel}
-          onRefund={(_: Id<'sales'>) => {
-            throw new Error('Function not implemented.')
-          }}
-        />
+            <ProductSalesBreakdownCard
+              todayProductSales={todayProductSales}
+              availableDepartments={availableDepartments}
+              isLoadingDepartments={isLoadingDepartments}
+              breakdownDepartment={breakdownDepartment}
+              onBreakdownDepartmentChange={setBreakdownDepartment}
+              storeFilter={filters.store}
+              stores={stores}
+            />
+
+            <SalesHistoryCard
+              sales={allSalesForHistory}
+              isLoading={isLoading}
+              isGlobal={isGlobal}
+              canAction={canAction}
+              canVoid={canVoid}
+              statusFilter={filters.status}
+              storeFilter={filters.store}
+              stores={stores}
+              onSelectSale={setSelectedSaleId}
+              onVoid={openVoid}
+              onCancel={openCancel}
+              onRefund={(_: Id<'sales'>) => {
+                throw new Error('Function not implemented.')
+              }}
+            />
+          </TabsContent>
+
+          <TabsContent value="by-store" className="space-y-6 pt-4">
+            <SalesStatCards stats={stats} isLoading={isLoading} />
+
+            <SalesFilters
+              filters={filters}
+              onFilterChange={handleFilterChange}
+              onClearFilters={handleClearFilters}
+              isGlobal={isGlobal}
+              stores={stores}
+              hasActiveFilters={hasActiveFilters}
+            />
+
+            <SalesHistoryCard
+              sales={allSalesForHistory}
+              isLoading={isLoading}
+              isGlobal={isGlobal}
+              canAction={canAction}
+              canVoid={canVoid}
+              statusFilter={filters.status}
+              storeFilter={filters.store}
+              stores={stores}
+              onSelectSale={setSelectedSaleId}
+              onVoid={openVoid}
+              onCancel={openCancel}
+              onRefund={(_: Id<'sales'>) => {
+                throw new Error('Function not implemented.')
+              }}
+            />
+          </TabsContent>
+
+          <TabsContent value="by-department" className="space-y-6 pt-4">
+            <SalesStatCards stats={stats} isLoading={isLoading} />
+
+            <SalesFilters
+              filters={filters}
+              onFilterChange={handleFilterChange}
+              onClearFilters={handleClearFilters}
+              isGlobal={isGlobal}
+              stores={stores}
+              hasActiveFilters={hasActiveFilters}
+            />
+
+            <ProductSalesBreakdownCard
+              todayProductSales={todayProductSales}
+              availableDepartments={availableDepartments}
+              isLoadingDepartments={isLoadingDepartments}
+              breakdownDepartment={breakdownDepartment}
+              onBreakdownDepartmentChange={setBreakdownDepartment}
+              storeFilter={filters.store}
+              stores={stores}
+            />
+          </TabsContent>
+
+          <TabsContent value="by-product" className="space-y-6 pt-4">
+            <SalesByProduct storeFilter={filters.store} stores={stores} />
+          </TabsContent>
+        </Tabs>
       </div>
 
       <SaleDetailSheet
