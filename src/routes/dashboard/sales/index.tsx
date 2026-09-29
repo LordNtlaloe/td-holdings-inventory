@@ -245,7 +245,7 @@ function SalesPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList>
+          <TabsList variant="line" className="w-full justify-start gap-0 overflow-x-auto">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="by-store">By Store</TabsTrigger>
             <TabsTrigger value="by-department">By Department</TabsTrigger>
